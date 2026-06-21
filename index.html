@@ -71,7 +71,6 @@
   .hero-readout .big{ font-family:'JetBrains Mono',monospace; font-size:40px; font-weight:700; letter-spacing:-1px; }
   .hero-readout .of{ font-family:'JetBrains Mono',monospace; font-size:18px; color:var(--muted); }
   .hero-stats{ display:flex; gap:22px; flex-wrap:wrap; }
-  .hero-stats{ display:flex; gap:22px; flex-wrap:wrap; }
   .hero-stat{ text-align:right; }
   .hero-stat .v{ font-family:'JetBrains Mono',monospace; font-size:18px; font-weight:600; color:var(--text); }
   .hero-stat .l{ font-size:10px; color:var(--muted-dim); text-transform:uppercase; letter-spacing:1px; }
@@ -378,6 +377,16 @@
       <div class="trace"><div class="trace-fill" id="heroTrace" style="--c:var(--teal); --c-glow:var(--teal-glow);"><div class="edge"></div></div></div>
       <div class="ticks" id="heroTicks"></div>
     </div>
+    
+    <!-- ADDED: NEW DAILY PROGRESS BAR INSIDE HERO -->
+    <div class="trace-wrap" style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line);">
+      <div class="eyebrow" style="margin-bottom: 8px; color:var(--amber);">Daily Progress</div>
+      <div class="trace"><div class="trace-fill" id="heroDailyTrace" style="--c:var(--amber); --c-glow:var(--amber-glow);"><div class="edge"></div></div></div>
+      <div style="display:flex; justify-content:space-between; margin-top:6px; font-size:11px; color:var(--muted-dim); font-family:'JetBrains Mono',monospace;">
+        <span id="heroDailyLabel">00:00:00 / 04:00:00</span>
+        <span id="heroDailyPct">0%</span>
+      </div>
+    </div>
   </div>
 
   <!-- TIMER -->
@@ -430,6 +439,8 @@
           <div class="card-title">Level (jeta tor nai)</div>
           <div class="card-sub">Your TITLE below</div>
         </div>
+        <!-- ADDED: VIEW LEVELS BUTTON -->
+        <button class="btn btn-ghost btn-sm" id="openLevelsModalBtn" style="color:var(--violet); border-color:var(--line);">View Levels</button>
       </div>
       <div class="level-top">
         <div class="level-ring"><span class="num mono" id="levelNum">1</span></div>
@@ -626,6 +637,18 @@
   </div>
 </div>
 
+<!-- ADDED: LEVELS MODAL -->
+<div class="modal-bg" id="levelsModal">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-title">Rank Progression</div>
+    <div class="modal-desc">All unlockable titles, required XP, and study hours needed to reach them.</div>
+    <div class="resources-list" id="levelsModalList" style="max-height: 50vh; margin-bottom: 14px;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-block" id="levelsCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast">
   <div class="tt" id="toastTitle">Level up</div>
   <div id="toastBody"></div>
@@ -769,6 +792,45 @@ const LEVEL_TITLES = [
     const into = xp - cumulative;
     const titleObj = LEVEL_TITLES.find(t=>level>=t.min && level<=t.max) || LEVEL_TITLES[LEVEL_TITLES.length-1];
     return { level, into, need, title: titleObj.title };
+  }
+
+  // ADDED: Calculates the exact cumulative math required for the modal stats.
+  function getCumulativeXpForLevel(targetLevel) {
+    let cumulative = 0;
+    let need = 500;
+    for(let i = 1; i < targetLevel; i++) {
+      cumulative += need;
+      need += 250;
+    }
+    return cumulative;
+  }
+
+  // ADDED: Populates the Levels modal correctly dynamically generating items
+  function populateLevelsModal() {
+    const list = document.getElementById('levelsModalList');
+    list.innerHTML = '';
+    LEVEL_TITLES.forEach(titleObj => {
+      const requiredXp = getCumulativeXpForLevel(titleObj.min);
+      const requiredHours = requiredXp / XP_PER_HOUR;
+      
+      const div = document.createElement('div');
+      div.className = 'resource-row';
+      div.style.alignItems = 'center'; // added to center the ring nicely
+      div.innerHTML = `
+        <div class="level-ring" style="width:36px; height:36px; min-width:36px; border-width:2px;">
+          <span class="num mono" style="font-size: 13px;">${titleObj.min}</span>
+        </div>
+        <div class="resource-info" style="margin-left: 10px;">
+          <div class="resource-title" style="font-size: 13px;">${escapeHtml(titleObj.title)}</div>
+          <div class="resource-meta">Levels ${titleObj.min}${titleObj.max !== titleObj.min ? ' - '+titleObj.max : ''}</div>
+        </div>
+        <div class="r-hours mono" style="text-align:right; width:auto; min-width:80px;">
+          <div style="color:var(--violet); font-weight:600; font-size:12px;">${requiredXp.toLocaleString()} XP</div>
+          <div style="font-size:10px; color:var(--muted-dim);">${requiredHours.toLocaleString()} HR</div>
+        </div>
+      `;
+      list.appendChild(div);
+    });
   }
 
   // ---------- cloud sync storage model ----------
@@ -936,6 +998,11 @@ const LEVEL_TITLES = [
     document.getElementById('dailyOf').textContent = '/ ' + formatHHMMSS(state.dailyGoalHours) + ' goal';
     document.getElementById('dailyTrace').style.width = dailyPct+'%';
     document.getElementById('goalMetTag').classList.toggle('show', todayHours >= state.dailyGoalHours);
+
+    // ADDED: Hero Daily trace progress bar logic updating identically
+    document.getElementById('heroDailyTrace').style.width = dailyPct+'%';
+    document.getElementById('heroDailyLabel').textContent = formatHHMMSS(todayHours) + ' / ' + formatHHMMSS(state.dailyGoalHours);
+    document.getElementById('heroDailyPct').textContent = dailyPct.toFixed(1) + '%';
 
     document.getElementById('levelNum').textContent = lvl.level;
     document.getElementById('levelTitle').textContent = lvl.title;
@@ -1276,6 +1343,13 @@ const LEVEL_TITLES = [
       if (e.key === 'Enter') sendChatMessage();
     };
     document.getElementById('sendChatBtn').onclick = sendChatMessage;
+
+    // ADDED: Levels Modal button listeners
+    document.getElementById('openLevelsModalBtn').onclick = () => {
+      populateLevelsModal();
+      openModal('levelsModal');
+    };
+    document.getElementById('levelsCloseBtn').onclick = () => closeModal('levelsModal');
 
     document.getElementById('settingsBtn').onclick = () => {
       document.getElementById('settingsName').value = state.name;
