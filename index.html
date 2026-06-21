@@ -427,14 +427,14 @@
     <div class="card">
       <div class="card-head">
         <div>
-          <div class="card-title">Operator Level</div>
-          <div class="card-sub">XP from study hours</div>
+          <div class="card-title">Level (jeta tor nai)</div>
+          <div class="card-sub">Your TITLE below</div>
         </div>
       </div>
       <div class="level-top">
         <div class="level-ring"><span class="num mono" id="levelNum">1</span></div>
         <div>
-          <div class="level-title" id="levelTitle">Trainee Engineer</div>
+          <div class="level-title" id="levelTitle">Mara Kha</div>
           <div class="level-xp" id="levelXp">0 / 500 XP</div>
         </div>
       </div>
@@ -704,14 +704,26 @@
   const XP_PER_HOUR = 100;
   const STORAGE_KEY = 'profile-and-stats';
 
-  const LEVEL_TITLES = [
-    {min:1,max:2,title:'Trainee Engineer'},
-    {min:3,max:5,title:'Circuit Apprentice'},
-    {min:6,max:9,title:'Systems Analyst'},
-    {min:10,max:14,title:'Senior Engineer'},
-    {min:15,max:20,title:'Lead Architect'},
-    {min:21,max:999,title:'Principal Engineer'},
-  ];
+const LEVEL_TITLES = [
+  {min:1, max:1, title:'Mara Kha'},
+  {min:2, max:3, title:'Tor dhara hobe na'},
+  {min:4, max:4, title:'Struggler'},
+  {min:5, max:5, title:'Backbencher(tui mama onk funny)'},
+  {min:6, max:7, title:'Backshot lover'},
+  {min:8, max:9, title:'Rifat Academy'},
+  {min:10, max:12, title:'BUET CSE or SUST CSE?'},
+  {min:13, max:14, title:'ACS Lover(tui asole gay)'},
+  {min:15, max:16, title:'Syllabus Sesh hoy nai?'},
+  {min:17, max:19, title:'NUET Slavery Dept. confirm'},
+  {min:20, max:24, title:'Asir bae'},
+  {min:25, max:29, title: 'Anas bae'},
+  {min:30, max:35, title:'Tham bae'},
+  {min:36, max:39, title:'BUET 1st confirm'},
+  {min:40, max:44, title:'ALL BD Rank 0'},
+  {min:45, max:49, title:'MIT confirm'},
+  {min:50, max:999, title:'This is Elon Musk'}
+];  
+
 
   let state = {
     id: null, name: '', password: '', dailyGoalHours: 4,
