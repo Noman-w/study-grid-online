@@ -6,7 +6,7 @@
 <title>STUDYGRID</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<!-- Supabase client (only used for shared room data — see the storage bridge script near the bottom of this file) -->
+<!-- Supabase client -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root{
@@ -71,6 +71,7 @@
   .hero-readout .big{ font-family:'JetBrains Mono',monospace; font-size:40px; font-weight:700; letter-spacing:-1px; }
   .hero-readout .of{ font-family:'JetBrains Mono',monospace; font-size:18px; color:var(--muted); }
   .hero-stats{ display:flex; gap:22px; flex-wrap:wrap; }
+  .hero-stats{ display:flex; gap:22px; flex-wrap:wrap; }
   .hero-stat{ text-align:right; }
   .hero-stat .v{ font-family:'JetBrains Mono',monospace; font-size:18px; font-weight:600; color:var(--text); }
   .hero-stat .l{ font-size:10px; color:var(--muted-dim); text-transform:uppercase; letter-spacing:1px; }
@@ -117,7 +118,7 @@
   .room-empty{ display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:10px; padding:30px 0; }
   .room-empty p{ font-size:12px; color:var(--muted); max-width:280px; line-height:1.5; }
   .group-code-display{ font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--teal); background:var(--panel-2); border:1px solid var(--line); padding:4px 10px; border-radius:999px; letter-spacing:1px; }
-  .room-grid{ display:grid; grid-template-columns:1.3fr 1fr; gap:20px; }
+  .room-grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
   @media (max-width:760px){ .room-grid{ grid-template-columns:1fr; } }
   .room-pane-title{ font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--muted-dim); margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; }
   .roster{ display:flex; flex-direction:column; gap:10px; overflow-y:auto; max-height:320px; padding-right:2px;}
@@ -128,7 +129,6 @@
   .r-avatar{ width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,var(--violet),var(--teal)); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:#0a0d10; flex-shrink:0; position:relative;}
   .status-dot{ position:absolute; bottom:-2px; right:-2px; width:8px; height:8px; border-radius:50%; border:2px solid var(--panel); }
   .status-dot.live{ background:var(--teal); }
-  .status-dot.today{ background:var(--amber); }
   .status-dot.idle{ background:var(--muted-dim); }
   .r-info{ flex:1; min-width:0; }
   .r-name{ font-size:12px; font-weight:600; display:flex; align-items:center; gap:6px; }
@@ -136,7 +136,7 @@
   .r-meta{ font-size:10px; color:var(--muted-dim); margin-top:2px; }
   .r-bar{ height:4px; background:var(--panel-2); border-radius:2px; margin-top:5px; overflow:hidden; }
   .r-bar-fill{ height:100%; background:var(--teal); }
-  .r-hours{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); flex-shrink:0; width:54px; text-align:right;}
+  .r-hours{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); flex-shrink:0; width:74px; text-align:right;}
 
   .resource-row{ display:flex; align-items:flex-start; gap:10px; padding:9px; border-radius:var(--radius-sm); background:var(--panel-2); border:1px solid var(--line); margin-bottom:8px; }
   .resource-icon{ width:26px; height:26px; border-radius:var(--radius-sm); background:var(--bg); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; color:var(--teal); }
@@ -144,14 +144,14 @@
   .resource-title{ font-size:12px; font-weight:600; display:block; text-decoration:none; color:var(--text); word-break:break-word;}
   .resource-title:hover{ color:var(--teal); }
   .resource-meta{ font-size:10px; color:var(--muted-dim); margin-top:2px; }
-  .resources-list{ max-height:320px; overflow-y:auto; padding-right:2px; }
+  .resources-list{ max-height:140px; overflow-y:auto; padding-right:2px; }
   .empty-mini{ font-size:11px; color:var(--muted-dim); padding:8px 0; }
 
   /* study log / notes */
   .log-row{ display:flex; gap:12px; padding:12px 0; border-bottom:1px solid var(--line-soft); }
   .log-row:last-child{ border-bottom:none; }
   .log-row .ld-date{ width:74px; flex-shrink:0; font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--muted-dim); line-height:1.4; padding-top:1px;}
-  .log-row .ld-hours{ width:48px; flex-shrink:0; font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600; color:var(--teal); }
+  .log-row .ld-hours{ width:74px; flex-shrink:0; font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600; color:var(--teal); }
   .log-row .ld-note{ flex:1; font-size:12.5px; color:var(--text); line-height:1.4; }
   .log-row .ld-note.empty{ color:var(--muted-dim); font-style:italic; }
   .log-row .ld-note .who{ color:var(--teal); font-weight:600; font-style:normal; }
@@ -168,7 +168,7 @@
   .btn-ghost{ background:transparent; }
   .btn-block{ width:100%; }
   .btn-sm{ padding:6px 10px; font-size:11px; }
-  input[type="text"], input[type="number"], input[type="url"], textarea{
+  input[type="text"], input[type="number"], input[type="url"], input[type="password"], textarea{
     width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius-sm);
     color:var(--text); padding:10px 12px; font-family:'JetBrains Mono',monospace; font-size:13px; resize:vertical;
   }
@@ -248,6 +248,7 @@
     text-align:center;
     position:relative;
     z-index:1;
+    width:100%;
   }
   .timer-eyebrow{
     display:flex;
@@ -363,14 +364,14 @@
       <div>
         <div class="eyebrow">Mission · 3000 Hours</div>
         <div class="hero-readout">
-          <span class="big mono" id="heroHours">0</span>
-          <span class="of mono">/ 3,000 HRS</span>
+          <span class="big mono" id="heroHours">00:00:00</span>
+          <span class="of mono">/ 3000:00:00</span>
         </div>
       </div>
       <div class="hero-stats">
         <div class="hero-stat"><div class="v mono" id="heroPct">0%</div><div class="l">Complete</div></div>
-        <div class="hero-stat"><div class="v mono" id="heroRemain">3,000</div><div class="l">Hrs Remaining</div></div>
-        <div class="hero-stat"><div class="v mono" id="heroAvg">0.0</div><div class="l">Avg Hrs / Day</div></div>
+        <div class="hero-stat"><div class="v mono" id="heroRemain">3000:00:00</div><div class="l">Remaining</div></div>
+        <div class="hero-stat"><div class="v mono" id="heroAvg">00:00:00</div><div class="l">Avg / Day</div></div>
       </div>
     </div>
     <div class="trace-wrap">
@@ -389,7 +390,13 @@
       <div style="position:relative; display:inline-block;">
         <div class="timer-clock mono" id="timerDisplay">00:00:00</div>
       </div>
-      <div class="timer-sub" id="timerSub">Start a session to begin tracking live time</div>
+      
+      <!-- Pre-Session Topic Input Field -->
+      <div class="field" id="preSessionTopicField" style="width:100%; max-width:320px; margin:4px auto 0;">
+        <input type="text" id="preSessionTopic" placeholder="What are you going to study?">
+      </div>
+
+      <div class="timer-sub" id="timerSub">Enter your topic above and launch a session to start tracking</div>
       <div class="timer-actions">
         <button class="btn timer-btn-start" id="timerToggle">▶ Start Session</button>
       </div>
@@ -406,8 +413,8 @@
           <div class="card-sub" id="dailyDateLabel">—</div>
         </div>
       </div>
-      <div class="daily-readout mono" id="dailyHours">0.0h</div>
-      <div class="daily-of" id="dailyOf">/ 4.0h goal</div>
+      <div class="daily-readout mono" id="dailyHours">00:00:00</div>
+      <div class="daily-of" id="dailyOf">/ 04:00:00 goal</div>
       <div class="trace"><div class="trace-fill" id="dailyTrace" style="--c:var(--amber); --c-glow:var(--amber-glow);"><div class="edge"></div></div></div>
       <div class="goal-met" id="goalMetTag">⬢ DAILY GOAL CLEARED</div>
       <div class="reset-countdown">
@@ -454,15 +461,28 @@
 
     <div class="room-grid" id="roomGrid" style="display:none;">
       <div>
-        <div class="room-pane-title">Members</div>
+        <div class="room-pane-title">Members & 3,000 HR Progress</div>
         <div class="roster" id="roster"></div>
       </div>
-      <div>
-        <div class="room-pane-title">
-          <span>Shared resources</span>
-          <button class="btn btn-sm" id="addResourceBtn">+ Add link</button>
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        
+        <!-- Live Chat Container -->
+        <div class="card" style="background:var(--panel-2); border:1px solid var(--line); padding:12px; height:220px; display:flex; flex-direction:column; margin:0;">
+          <div class="room-pane-title">Room Live Chat</div>
+          <div id="chatMessages" style="flex:1; overflow-y:auto; font-size:12px; margin-bottom:8px; display:flex; flex-direction:column; gap:4px; padding-right:4px;"></div>
+          <div style="display:flex; gap:6px;">
+            <input type="text" id="chatInput" placeholder="Type a message..." style="padding:6px 10px; height:30px;">
+            <button class="btn btn-primary btn-sm" id="sendChatBtn" style="padding:4px 10px; height:30px;">Send</button>
+          </div>
         </div>
-        <div class="resources-list" id="resourcesList"></div>
+
+        <div>
+          <div class="room-pane-title">
+            <span>Shared resources</span>
+            <button class="btn btn-sm" id="addResourceBtn">+ Add link</button>
+          </div>
+          <div class="resources-list" id="resourcesList"></div>
+        </div>
       </div>
       <div style="grid-column:1 / -1;">
         <div class="room-pane-title" style="margin-top:6px;">
@@ -492,10 +512,14 @@
 <div class="modal-bg" id="onboardModal">
   <div class="modal">
     <div class="modal-title">Welcome to STUDYGRID</div>
-    <div class="modal-desc">Set up your operator profile before launching the mission tracker.</div>
+    <div class="modal-desc">Type your unique name and password. If the cloud profile exists, it validates parameters to log you in.</div>
     <div class="field">
-      <label class="field-label">Your name</label>
+      <label class="field-label">Your profile username</label>
       <input type="text" id="onboardName" placeholder="e.g. Leo" maxlength="20">
+    </div>
+    <div class="field">
+      <label class="field-label">Password</label>
+      <input type="password" id="onboardPassword" placeholder="••••••••">
     </div>
     <div class="field">
       <label class="field-label">Daily study goal (hours)</label>
@@ -511,7 +535,8 @@
     <div class="modal-title">Settings</div>
     <div class="field">
       <label class="field-label">Your name</label>
-      <input type="text" id="settingsName" maxlength="20">
+      <input type="text" id="settingsName" maxlength="20" disabled>
+      <span style="font-size:9px; color:var(--muted-dim)">Names match cloud data entries and cannot be changed.</span>
     </div>
     <div class="field">
       <label class="field-label">Daily study goal (hours)</label>
@@ -524,7 +549,7 @@
 
     <div class="divider"></div>
     <label class="field-label">Backup</label>
-    <div class="notice" style="margin-bottom:10px;">Your progress already autosaves to your account. For an extra copy in Google Drive, export a backup file below and upload it to Drive yourself — a real Drive sign-in isn't possible from inside this app.</div>
+    <div class="notice" style="margin-bottom:10px;">Your progress already autosaves to your cloud profile sync. For an extra copy in Google Drive, export a backup file below and upload it to Drive manually.</div>
     <div class="settings-row-actions">
       <button class="btn btn-block btn-sm" id="exportBtn">Export backup</button>
       <button class="btn btn-block btn-sm" id="importBtn">Import backup</button>
@@ -535,15 +560,15 @@
   </div>
 </div>
 
-<!-- SESSION LOG MODAL (timer-only, no manual hours) -->
+<!-- SESSION LOG MODAL -->
 <div class="modal-bg" id="logModal">
   <div class="modal">
     <div class="modal-title" id="logModalTitle">Save your session</div>
-    <div class="modal-desc" id="logModalDesc">Session complete. Add a note about what you studied.</div>
+    <div class="modal-desc" id="logModalDesc">Session complete. Add an additional note if needed.</div>
     <div class="session-time-badge mono" id="logTimeBadge">00:00:00</div>
     <div class="field">
-      <label class="field-label">What did you study?</label>
-      <textarea id="logNoteInput" placeholder="e.g. Thermodynamics — Ch.4 problem set, GATE PYQs 2018-2020" style="min-height:90px;"></textarea>
+      <label class="field-label">Additional notes (Optional)</label>
+      <textarea id="logNoteInput" placeholder="e.g. Completed Ch.4 problem set, reviewed errors" style="min-height:90px;"></textarea>
     </div>
     <div class="modal-actions">
       <button class="btn btn-block" id="logCancel">Discard session</button>
@@ -606,59 +631,16 @@
   <div id="toastBody"></div>
 </div>
 
-<!--
-  ============================================================
-  DEPLOYMENT SETUP — read this before pushing to Vercel/GitHub
-  ============================================================
-  This file no longer needs main.js or preload.js to run — those
-  were only for the Electron desktop build. In a browser, this
-  script below provides window.storage itself:
-    - Personal data (your hours, XP, notes)  -> browser localStorage
-    - Room data (shared with friends)        -> Supabase
-
-  STEP 1 — Create a free project at https://supabase.com
-
-  STEP 2 — In the Supabase SQL editor, run:
-
-    create table if not exists studygrid_kv (
-      key text primary key,
-      value jsonb not null,
-      updated_at timestamptz not null default now()
-    );
-
-    alter table studygrid_kv enable row level security;
-
-    create policy "public read"   on studygrid_kv for select using (true);
-    create policy "public insert" on studygrid_kv for insert with check (true);
-    create policy "public update" on studygrid_kv for update using (true);
-    create policy "public delete" on studygrid_kv for delete using (true);
-
-    -- enables instant live updates for room members (optional but recommended)
-    alter publication supabase_realtime add table studygrid_kv;
-
-  Note: these policies allow anyone with your project URL/key to read
-  and write any room — the same trust level as the desktop version,
-  where anyone with file access to the storage folder could edit any
-  room. Fine for a small group of friends; if you want it locked down
-  further later, that needs real Supabase Auth and per-room policies.
-
-  STEP 3 — In Supabase, go to Project Settings -> API and copy your
-  "Project URL" and "anon public" key into the two constants right
-  below (SUPABASE_URL / SUPABASE_ANON_KEY).
-
-  STEP 4 — Push this repo to GitHub, then import it on vercel.com
-  ("Add New Project" -> select the repo -> Deploy). No build command
-  or framework preset is needed — it's a static HTML file.
--->
 <script>
-  const SUPABASE_URL = 'https://shasdgmyagrxkdslnuiu.supabase.co';       // e.g. https://abcdefgh.supabase.co
-  const SUPABASE_ANON_KEY = 'sb_publishable_ggdJG-tKTwanwiS-OENB5Q_ymbzkFT2';     // the "anon public" key, safe to expose client-side
+  // Paste your configuration credentials inside these single quotes
+  const SUPABASE_URL = 'https://shasdgmyagrxkdslnuiu.supabase.co';       
+  const SUPABASE_ANON_KEY = 'sb_publishable_ggdJG-tKTwanwiS-OENB5Q_ymbzkFT2';     
 
   let sb = null;
   if (SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_URL.startsWith('YOUR_') && window.supabase) {
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   } else {
-    console.warn('STUDYGRID: Supabase is not configured yet — personal tracking will work, but Room features (join/create/sync) will not until you fill in SUPABASE_URL and SUPABASE_ANON_KEY near the top of the script.');
+    console.warn('STUDYGRID: Supabase is not configured yet.');
   }
 
   async function sbGet(key){
@@ -684,8 +666,6 @@
     }catch(e){ console.error('Supabase delete failed:', e); return false; }
   }
 
-  // Same get/set/delete(key, isGlobal) shape preload.js used to expose —
-  // everything else in the app below is unchanged.
   window.storage = {
     async get(key, isGlobal){
       if(isGlobal) return sbGet(key);
@@ -704,8 +684,6 @@
     }
   };
 
-  // Optional: instant room updates instead of waiting for the 15s poll.
-  // Exposed on window so the main app script can call it once a room is joined.
   let groupRealtimeChannel = null;
   window.subscribeGroupRealtime = function(groupCode, onChange){
     if(!sb) return;
@@ -736,20 +714,20 @@
   ];
 
   let state = {
-    id: null, name: '', dailyGoalHours: 4,
+    id: null, name: '', password: '', dailyGoalHours: 4,
     totalHours: 0, totalXP: 0,
     dailyLog: {}, sessionHistory: [],
     groupCode: null, groupName: null
   };
 
-  let timer = { running:false, startedAt:null, tickHandle:null };
+  let timer = { running:false, startedAt:null, tickHandle:null, currentTopic:'' };
   let groupPollHandle = null;
+  let cachedGroupData = null;
   let pendingTimerHours = null;
 
   // ---------- utils ----------
   function uid(len){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<len;i++) s+=c[Math.floor(Math.random()*c.length)]; return s; }
   function localDateKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-  function fmtHours(h){ return (Math.round(h*10)/10).toFixed(1); }
   function clamp(n,a,b){ return Math.max(a,Math.min(b,n)); }
   function initials(name){ return (name||'?').trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
   function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
@@ -762,6 +740,15 @@
     return Math.floor(diff/86400000)+'d ago';
   }
 
+  // Converts float hours directly into localized hr:min:sec (hh:mm:ss style)
+  function formatHHMMSS(totalHours) {
+    const totalSeconds = Math.round(totalHours * 3600);
+    const hrs = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+
   function getLevelInfo(xp){
     let level=1, cumulative=0, need=500;
     while(xp >= cumulative+need){
@@ -772,22 +759,25 @@
     return { level, into, need, title: titleObj.title };
   }
 
-  // ---------- storage ----------
+  // ---------- cloud sync storage model ----------
   async function loadProfile(){
     try{
       const r = await window.storage.get(STORAGE_KEY, false);
       if(r && r.value){
-        const data = JSON.parse(r.value);
-        state = Object.assign(state, data);
+        state = Object.assign(state, JSON.parse(r.value));
         return true;
       }
-    }catch(e){ /* no profile yet */ }
+    }catch(e){ }
     return false;
   }
 
   async function saveProfile(){
     try{
       await window.storage.set(STORAGE_KEY, JSON.stringify(state), false);
+      if(state.name) {
+        // Sync profile data fully to cloud key indexed by downcased username
+        await window.storage.set('user-profile:' + state.name.toLowerCase(), JSON.stringify(state), true);
+      }
     }catch(e){ console.error('save failed', e); }
   }
 
@@ -795,22 +785,35 @@
     if(!state.groupCode) return;
     const key = 'group:'+state.groupCode;
     try{
-      let cur = { name: state.groupName || state.groupCode, members:{}, resources:[] };
+      let cur = { name: state.groupName || state.groupCode, members:{}, resources:[], messages:[] };
       try{
         const r = await window.storage.get(key, true);
         if(r && r.value) cur = JSON.parse(r.value);
-      }catch(e){ /* group doesn't exist yet, will create */ }
+      }catch(e){ }
       const lvl = getLevelInfo(state.totalXP);
       const today = localDateKey();
       cur.members = cur.members || {};
       cur.resources = cur.resources || [];
+      cur.messages = cur.messages || [];
+
+      // Append running state markers to cloud entity parameters
+      let currentTimerState = { running: false, startedAt: null, topic: '' };
+      if (timer.running) {
+        currentTimerState = {
+          running: true,
+          startedAt: timer.startedAt,
+          topic: timer.currentTopic
+        };
+      }
+
       cur.members[state.id] = {
         name: state.name, totalHours: state.totalHours,
         level: lvl.level, title: lvl.title,
         todayHours: state.dailyLog[today]||0,
         dailyGoalHours: state.dailyGoalHours,
         lastActive: Date.now(),
-        recentLog: (state.sessionHistory||[]).slice(0,5).map(s=>({ ts: s.ts, hours: s.hours, note: (s.note||'').slice(0,200) }))
+        timerState: currentTimerState,
+        recentLog: (state.sessionHistory||[]).filter(s => !s.isLive).slice(0,5).map(s=>({ ts: s.ts, hours: s.hours, note: (s.note||'').slice(0,200) }))
       };
       if(state.groupName) cur.name = state.groupName;
       await window.storage.set(key, JSON.stringify(cur), true);
@@ -830,7 +833,7 @@
     if(!state.groupCode) return;
     const key = 'group:'+state.groupCode;
     try{
-      let cur = { name: state.groupName || state.groupCode, members:{}, resources:[] };
+      let cur = { name: state.groupName || state.groupCode, members:{}, resources:[], messages:[] };
       try{
         const r = await window.storage.get(key, true);
         if(r && r.value) cur = JSON.parse(r.value);
@@ -840,6 +843,30 @@
       cur.resources = cur.resources.slice(0,30);
       await window.storage.set(key, JSON.stringify(cur), true);
     }catch(e){ console.error('resource share failed', e); }
+  }
+
+  // Broadcast chat messages straight through the room data matrix
+  async function sendChatMessage() {
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (!text || !state.groupCode) return;
+    input.value = '';
+
+    const key = 'group:' + state.groupCode;
+    try {
+      let cur = { name: state.groupName || state.groupCode, members:{}, resources:[], messages:[] };
+      const r = await window.storage.get(key, true);
+      if(r && r.value) cur = JSON.parse(r.value);
+      cur.messages = cur.messages || [];
+      cur.messages.push({
+        sender: state.name,
+        text: text,
+        ts: Date.now()
+      });
+      if (cur.messages.length > 50) cur.messages.shift();
+      await window.storage.set(key, JSON.stringify(cur), true);
+      renderRoom();
+    } catch(e) { console.error('chat broadcast failed', e); }
   }
 
   // ---------- toast ----------
@@ -853,7 +880,7 @@
     toastTimeout = setTimeout(()=>el.classList.remove('show'), 3600);
   }
 
-  // ---------- render ----------
+  // ---------- render elements ----------
   function renderTicks(container, totalMax, stepMinor, stepMajor){
     container.innerHTML = '';
     for(let v=stepMinor; v<=totalMax; v+=stepMinor){
@@ -880,11 +907,12 @@
     document.getElementById('pillLevel').textContent = 'LV.'+lvl.level;
 
     const pct = clamp((state.totalHours/GOAL_TOTAL)*100, 0, 100);
-    document.getElementById('heroHours').textContent = Number(fmtHours(state.totalHours)).toLocaleString(undefined, {minimumFractionDigits:1, maximumFractionDigits:1});
+    // Overhaul standard layouts to use hh:mm:ss strings
+    document.getElementById('heroHours').textContent = formatHHMMSS(state.totalHours);
     document.getElementById('heroPct').textContent = pct.toFixed(1)+'%';
-    document.getElementById('heroRemain').textContent = Math.max(0, Math.round(GOAL_TOTAL-state.totalHours)).toLocaleString();
+    document.getElementById('heroRemain').textContent = formatHHMMSS(Math.max(0, GOAL_TOTAL-state.totalHours));
     const daysActive = Math.max(1, Object.keys(state.dailyLog).length);
-    document.getElementById('heroAvg').textContent = (state.totalHours/daysActive).toFixed(1);
+    document.getElementById('heroAvg').textContent = formatHHMMSS(state.totalHours/daysActive);
     document.getElementById('heroTrace').style.width = pct+'%';
     renderTicks(document.getElementById('heroTicks'), GOAL_TOTAL, 250, 1000);
 
@@ -892,8 +920,8 @@
     const todayHours = state.dailyLog[today] || 0;
     const dailyPct = clamp((todayHours/state.dailyGoalHours)*100, 0, 100);
     document.getElementById('dailyDateLabel').textContent = new Date().toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
-    document.getElementById('dailyHours').textContent = fmtHours(todayHours)+'h';
-    document.getElementById('dailyOf').textContent = '/ '+fmtHours(state.dailyGoalHours)+'h goal';
+    document.getElementById('dailyHours').textContent = formatHHMMSS(todayHours);
+    document.getElementById('dailyOf').textContent = '/ ' + formatHHMMSS(state.dailyGoalHours) + ' goal';
     document.getElementById('dailyTrace').style.width = dailyPct+'%';
     document.getElementById('goalMetTag').classList.toggle('show', todayHours >= state.dailyGoalHours);
 
@@ -937,63 +965,111 @@
   function renderStudyLog(){
     const list = document.getElementById('studyLogList');
     if(!state.sessionHistory || state.sessionHistory.length===0){
-      list.innerHTML = '<div class="studylog-empty">No sessions logged yet. Log your first hours below.</div>';
+      list.innerHTML = '<div class="studylog-empty">No sessions logged yet. Enter details above to begin.</div>';
       return;
     }
     list.innerHTML = '';
     state.sessionHistory.slice(0,20).forEach(s=>{
-      const d = new Date(s.ts);
-      const dateStr = d.toLocaleDateString(undefined,{month:'short', day:'numeric'}) + ' · ' + d.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'});
+      let dateStr, hoursText, noteText;
+      // Detect if target element structure represents a live ticking item
+      if (s.isLive) {
+        dateStr = '[Active Now]';
+        const elapsedMs = Date.now() - timer.startedAt;
+        hoursText = fmtClock(elapsedMs);
+        noteText = `Studying: <span style="color:var(--teal); font-weight:600;">${escapeHtml(s.note)}...</span>`;
+      } else {
+        const d = new Date(s.ts);
+        dateStr = d.toLocaleDateString(undefined,{month:'short', day:'numeric'}) + ' · ' + d.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'});
+        hoursText = formatHHMMSS(s.hours);
+        noteText = s.note ? escapeHtml(s.note) : 'No notes added';
+      }
       const row = document.createElement('div');
       row.className = 'log-row';
       row.innerHTML = `
         <div class="ld-date">${dateStr}</div>
-        <div class="ld-hours mono">${fmtHours(s.hours)}h</div>
-        <div class="ld-note ${s.note ? '' : 'empty'}">${s.note ? escapeHtml(s.note) : 'No notes added'}</div>
+        <div class="ld-hours mono" style="color: ${s.isLive ? 'var(--teal)' : 'inherit'}; width:74px;">${hoursText}</div>
+        <div class="ld-note">${noteText}</div>
       `;
       list.appendChild(row);
+    });
+  }
+
+  // Fast loop function to keep running dynamic updates rendering fluidly
+  function runRosterDOMEngine(group) {
+    const roster = document.getElementById('roster');
+    if(!group || !group.members) return;
+
+    const members = Object.entries(group.members).map(([id,m])=>({id,...m}));
+    members.sort((a,b)=>b.totalHours-a.totalHours);
+    roster.innerHTML = '';
+    
+    members.forEach((m, i)=>{
+      const row = document.createElement('div');
+      row.className = 'roster-row' + (m.id===state.id ? ' me' : '');
+      const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
+      
+      // Calculate target width properties locked to a global 3,000-hour milestone metric
+      const mPct = clamp((m.totalHours / GOAL_TOTAL) * 100, 0, 100);
+      
+      // Implement active checking metrics to render indicator status lights
+      const secondsAgo = m.lastActive ? (Date.now() - m.lastActive) / 1000 : 9999;
+      const isOnline = secondsAgo <= 60; 
+      const statusClass = isOnline ? 'live' : 'idle';
+      
+      // Render running timer indicators on corresponding member panels
+      let runtimeText = '';
+      if (m.timerState && m.timerState.running && isOnline) {
+        const elapsedSeconds = Math.floor((Date.now() - m.timerState.startedAt) / 1000);
+        const h = String(Math.floor(elapsedSeconds / 3600)).padStart(2,'0');
+        const min = String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2,'0');
+        const sec = String(elapsedSeconds % 60).padStart(2,'0');
+        runtimeText = `<span style="color:var(--teal); font-weight:600;"> Studying: ${escapeHtml(m.timerState.topic)} (${h}:${min}:${sec})</span>`;
+      } else {
+        runtimeText = m.todayHours > 0 ? `Logged ${formatHHMMSS(m.todayHours)} today` : 'Offline / Idle';
+      }
+
+      row.innerHTML = `
+        <div class="rank ${rankClass}">${i+1}</div>
+        <div class="r-avatar">${initials(m.name)}<span class="status-dot ${statusClass}"></span></div>
+        <div class="r-info">
+          <div class="r-name">${escapeHtml(m.name)} ${m.id===state.id?'<span class="you-tag">YOU</span>':''}</div>
+          <div class="r-meta">${runtimeText} · Lv.${m.level||1} ${escapeHtml(m.title||'')}</div>
+          <div class="r-bar" title="${mPct.toFixed(1)}% to goal"><div class="r-bar-fill" style="width:${mPct}%;"></div></div>
+        </div>
+        <div class="r-hours mono" style="font-size:11px; width:74px;">${formatHHMMSS(m.totalHours)}</div>
+      `;
+      roster.appendChild(row);
     });
   }
 
   async function renderRoom(){
     if(!state.groupCode) return;
     const group = await fetchGroup();
-    const roster = document.getElementById('roster');
+    cachedGroupData = group; 
+    
     const resList = document.getElementById('resourcesList');
-
     if(!group || !group.members){
-      roster.innerHTML = '<div class="empty-mini">No members yet.</div>';
+      document.getElementById('roster').innerHTML = '<div class="empty-mini">No members yet.</div>';
       resList.innerHTML = '<div class="empty-mini">No resources shared yet.</div>';
       return;
     }
 
-    const members = Object.entries(group.members).map(([id,m])=>({id,...m}));
-    members.sort((a,b)=>b.totalHours-a.totalHours);
-    roster.innerHTML = '';
-    members.forEach((m, i)=>{
-      const row = document.createElement('div');
-      row.className = 'roster-row' + (m.id===state.id ? ' me' : '');
-      const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
-      const pct = clamp((m.totalHours/GOAL_TOTAL)*100,0,100);
-      const minutesAgo = m.lastActive ? (Date.now()-m.lastActive)/60000 : 9999;
-      const statusClass = minutesAgo<5 ? 'live' : (m.todayHours>0 ? 'today' : 'idle');
-      const statusText = minutesAgo<5 ? 'Active now' : (m.todayHours>0 ? fmtHours(m.todayHours)+'h today' : 'Idle today');
-      row.innerHTML = `
-        <div class="rank ${rankClass}">${i+1}</div>
-        <div class="r-avatar">${initials(m.name)}<span class="status-dot ${statusClass}"></span></div>
-        <div class="r-info">
-          <div class="r-name">${escapeHtml(m.name)} ${m.id===state.id?'<span class="you-tag">YOU</span>':''}</div>
-          <div class="r-meta">${statusText} · Lv.${m.level||1} ${escapeHtml(m.title||'')}</div>
-          <div class="r-bar"><div class="r-bar-fill" style="width:${pct}%;"></div></div>
-        </div>
-        <div class="r-hours mono">${fmtHours(m.totalHours)}h</div>
-      `;
-      roster.appendChild(row);
+    runRosterDOMEngine(group);
+
+    // Build out UI structures for active chat logs
+    const chatBox = document.getElementById('chatMessages');
+    const messages = group.messages || [];
+    chatBox.innerHTML = '';
+    messages.forEach(msg => {
+      const mDiv = document.createElement('div');
+      mDiv.innerHTML = `<span style="color:var(--teal); font-weight:600;">${escapeHtml(msg.sender)}:</span> ${escapeHtml(msg.text)}`;
+      chatBox.appendChild(mDiv);
     });
+    chatBox.scrollTop = chatBox.scrollHeight;
 
     const resources = group.resources || [];
     if(resources.length===0){
-      resList.innerHTML = '<div class="empty-mini">No resources shared yet. Add a PDF or Drive link for the room.</div>';
+      resList.innerHTML = '<div class="empty-mini">No resources shared yet.</div>';
     } else {
       resList.innerHTML = '';
       resources.forEach(r=>{
@@ -1011,9 +1087,9 @@
       });
     }
 
-    // combined, time-sorted feed of every member's recent study sessions
     const activityFeed = document.getElementById('roomActivityList');
     const activity = [];
+    const members = Object.entries(group.members).map(([id,m])=>({id,...m}));
     members.forEach(m=>{
       (m.recentLog||[]).forEach(s=>activity.push({ id:m.id, name:m.name, ts:s.ts, hours:s.hours, note:s.note }));
     });
@@ -1030,16 +1106,16 @@
         const whoLabel = escapeHtml(s.name) + (s.id===state.id ? ' (you)' : '');
         row.innerHTML = `
           <div class="ld-date">${dateStr}</div>
-          <div class="ld-hours mono">${fmtHours(s.hours)}h</div>
-          <div class="ld-note ${s.note ? '' : 'empty'}"><span class="who">${whoLabel}</span> — ${s.note ? escapeHtml(s.note) : 'No notes added'}</div>
+          <div class="ld-hours mono" style="width:74px;">${formatHHMMSS(s.hours)}</div>
+          <div class="ld-note"><span class="who">${whoLabel}</span> — ${s.note ? escapeHtml(s.note) : 'No notes added'}</div>
         `;
         activityFeed.appendChild(row);
       });
     }
   }
 
-  // ---------- core actions ----------
-  async function addStudyHours(hours, note){
+  // ---------- core storage transactions ----------
+  async function addStudyHoursRecord(hours){
     hours = Math.round(hours*100)/100;
     if(hours<=0) return;
     const prevLevel = getLevelInfo(state.totalXP).level;
@@ -1049,8 +1125,6 @@
     state.totalXP += Math.round(hours*XP_PER_HOUR);
     const today = localDateKey();
     state.dailyLog[today] = (state.dailyLog[today]||0) + hours;
-    state.sessionHistory.unshift({ ts: Date.now(), hours, note: (note||'').trim() });
-    state.sessionHistory = state.sessionHistory.slice(0,50);
 
     await saveProfile();
     render();
@@ -1064,11 +1138,11 @@
     } else if(newMilestone>prevMilestone){
       showToast('Milestone reached', Math.round(newMilestone*500)+' hours logged');
     } else {
-      showToast('Session logged', '+'+fmtHours(hours)+'h · +'+Math.round(hours*XP_PER_HOUR)+' XP');
+      showToast('Session logged', '+'+formatHHMMSS(hours) + ' · +' + Math.round(hours*XP_PER_HOUR) + ' XP');
     }
   }
 
-  // ---------- timer ----------
+  // ---------- timer mechanisms ----------
   function fmtClock(ms){
     const s = Math.floor(ms/1000);
     const h = String(Math.floor(s/3600)).padStart(2,'0');
@@ -1080,27 +1154,47 @@
     const elapsed = Date.now()-timer.startedAt;
     document.getElementById('timerDisplay').textContent = fmtClock(elapsed);
   }
+  
   function startTimer(){
-    timer.running = true; timer.startedAt = Date.now();
-    // update hero UI
+    const topicInput = document.getElementById('preSessionTopic');
+    timer.currentTopic = topicInput.value.trim() || 'General Focus';
+    topicInput.disabled = true;
+
+    timer.running = true; 
+    timer.startedAt = Date.now();
+    
+    // Initialize explicit placeholder item array profiles inside local session histories
+    state.sessionHistory.unshift({
+      ts: Date.now(),
+      hours: 0,
+      note: timer.currentTopic,
+      isLive: true
+    });
+
     const hero = document.getElementById('timerHero');
     hero.classList.add('running');
     document.getElementById('timerDisplay').classList.add('running');
     document.getElementById('dockDot').classList.add('show');
     document.getElementById('timerStatusLabel').textContent = 'LIVE';
     document.getElementById('timerStatusLabel').classList.add('live');
-    document.getElementById('timerSub').textContent = 'Session in progress — stop when you\'re done';
+    document.getElementById('timerSub').textContent = `Locking in on: ${timer.currentTopic}`;
     const btn = document.getElementById('timerToggle');
     btn.textContent = '⏹ Stop Session';
     btn.className = 'timer-btn-stop';
-    btn.id = 'timerToggle';
+    
     timer.tickHandle = setInterval(tickTimer, 1000);
+    syncGroupSelf();
   }
+
   function stopTimerAndPromptLog(){
     clearInterval(timer.tickHandle);
     const elapsedMs = Date.now()-timer.startedAt;
     timer.running = false;
-    // restore hero UI to idle
+    
+    const topicInput = document.getElementById('preSessionTopic');
+    topicInput.disabled = false;
+    topicInput.value = '';
+
     const hero = document.getElementById('timerHero');
     hero.classList.remove('running');
     document.getElementById('timerDisplay').classList.remove('running');
@@ -1108,27 +1202,32 @@
     document.getElementById('dockDot').classList.remove('show');
     document.getElementById('timerStatusLabel').textContent = 'READY';
     document.getElementById('timerStatusLabel').classList.remove('live');
-    document.getElementById('timerSub').textContent = 'Start a session to begin tracking live time';
+    document.getElementById('timerSub').textContent = 'Enter your topic above and launch a session to start tracking';
     const btn = document.getElementById('timerToggle');
     btn.textContent = '▶ Start Session';
     btn.className = 'timer-btn-start';
-    btn.id = 'timerToggle';
+    
     const hrs = Math.round((elapsedMs/3600000)*100)/100;
-    if(hrs < (1/60)) return; // ignore accidental sub-second taps
+    if(hrs < (1/60)) {
+      state.sessionHistory.shift();
+      saveProfile();
+      render();
+      syncGroupSelf();
+      return; 
+    }
     pendingTimerHours = hrs;
-    // show modal with timed duration badge
-    document.getElementById('logModalTitle').textContent = 'Save your session';
-    document.getElementById('logModalDesc').textContent = 'Great work! Add a note about what you covered.';
+    
     document.getElementById('logTimeBadge').textContent = fmtClock(elapsedMs);
     document.getElementById('logNoteInput').value = '';
     openModal('logModal');
+    syncGroupSelf();
   }
 
   // ---------- modals ----------
   function openModal(id){ document.getElementById(id).classList.add('show'); }
   function closeModal(id){ document.getElementById(id).classList.remove('show'); }
 
-  // ---------- backup ----------
+  // ---------- backup actions ----------
   function exportBackup(){
     const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
     const url = URL.createObjectURL(blob);
@@ -1139,7 +1238,7 @@
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    showToast('Backup exported', 'Save this file to your Google Drive to keep it safe');
+    showToast('Backup exported', 'Save this file to keep your progress history safe');
   }
   function importBackup(file){
     const reader = new FileReader();
@@ -1149,28 +1248,31 @@
         if(typeof data.totalHours !== 'number') throw new Error('invalid file');
         state = Object.assign(state, data);
         await saveProfile();
-        showToast('Backup restored', 'Your data has been imported');
+        showToast('Backup restored', 'Your historical tracking profile has been reloaded');
         render();
         if(state.groupCode){ await syncGroupSelf(); startGroupPolling(); }
       }catch(err){
-        alert('That file doesn\'t look like a valid STUDYGRID backup.');
+        alert('Invalid file format parsing STUDYGRID data profiles.');
       }
     };
     reader.readAsText(file);
   }
 
-  // ---------- wiring ----------
+  // ---------- setup bindings ----------
   function wireEvents(){
-    document.getElementById('settingsBtn').onclick = ()=>{
+    document.getElementById('chatInput').onkeydown = (e) => {
+      if (e.key === 'Enter') sendChatMessage();
+    };
+    document.getElementById('sendChatBtn').onclick = sendChatMessage;
+
+    document.getElementById('settingsBtn').onclick = () => {
       document.getElementById('settingsName').value = state.name;
       document.getElementById('settingsGoal').value = state.dailyGoalHours;
       openModal('settingsModal');
     };
     document.getElementById('settingsCancel').onclick = ()=>closeModal('settingsModal');
     document.getElementById('settingsSave').onclick = async ()=>{
-      const name = document.getElementById('settingsName').value.trim();
       const goal = parseFloat(document.getElementById('settingsGoal').value);
-      if(name) state.name = name;
       if(goal>0) state.dailyGoalHours = goal;
       await saveProfile();
       render();
@@ -1184,19 +1286,36 @@
       e.target.value = '';
     };
     document.getElementById('resetDataBtn').onclick = async ()=>{
-      if(!confirm('This clears all your local progress (hours, XP, notes, room membership). Continue?')) return;
+      if(!confirm('Clear tracking metrics completely?')) return;
       try{ await window.storage.delete(STORAGE_KEY, false); }catch(e){}
       location.reload();
     };
 
-    document.getElementById('logCancel').onclick = ()=>{ pendingTimerHours=null; closeModal('logModal'); };
+    document.getElementById('logCancel').onclick = ()=>{ 
+      pendingTimerHours=null; 
+      state.sessionHistory.shift(); 
+      saveProfile();
+      render();
+      syncGroupSelf();
+      closeModal('logModal'); 
+    };
     document.getElementById('logSubmit').onclick = async ()=>{
       const hrs = pendingTimerHours;
-      const note = document.getElementById('logNoteInput').value;
+      let extraNotes = document.getElementById('logNoteInput').value.trim();
       if(!hrs || hrs<=0) return;
       closeModal('logModal');
       pendingTimerHours = null;
-      await addStudyHours(hrs, note);
+
+      // Flatten tracking profile elements out of temporary live states
+      if(state.sessionHistory[0] && state.sessionHistory[0].isLive) {
+        const structuralTopic = state.sessionHistory[0].note;
+        state.sessionHistory[0] = {
+          ts: Date.now(),
+          hours: hrs,
+          note: structuralTopic + (extraNotes ? ' — ' + extraNotes : '')
+        };
+      }
+      await addStudyHoursRecord(hrs);
     };
 
     document.getElementById('timerToggle').onclick = ()=>{
@@ -1207,7 +1326,7 @@
     document.getElementById('openGroupModalBtn').onclick = ()=>openModal('groupModal');
     document.getElementById('groupCancel').onclick = ()=>closeModal('groupModal');
     document.getElementById('leaveGroupBtn').onclick = async ()=>{
-      if(!confirm('Leave this room? Your friends will no longer see your progress.')) return;
+      if(!confirm('Leave this room? Your progress will no longer be visible here.')) return;
       state.groupCode = null; state.groupName = null;
       await saveProfile();
       stopGroupPolling();
@@ -1241,7 +1360,7 @@
         state.groupName = name;
         await saveProfile();
         await syncGroupSelf();
-        showToast('Room created', 'Share code '+code+' with friends');
+        showToast('Room created', 'Share code '+code+' with your study group');
       }
       closeModal('groupModal');
       render();
@@ -1258,21 +1377,25 @@
       const title = document.getElementById('resourceTitleInput').value.trim();
       const url = document.getElementById('resourceUrlInput').value.trim();
       if(!title || !url || !/^https?:\/\//i.test(url)){
-        alert('Add a title and a valid link starting with http:// or https://');
+        alert('Please enter a valid URL starting with http:// or https://');
         return;
       }
       closeModal('resourceModal');
       await addResourceToGroup(title, url);
-      showToast('Resource shared', 'Your room can now see this link');
+      showToast('Resource shared', 'Your link has been added to the room');
       renderRoom();
     };
   }
 
+  // Fast internal ticking loops to drive background status checks safely
   function startGroupPolling(){
     stopGroupPolling();
     if(!state.groupCode) return;
     renderRoom();
-    groupPollHandle = setInterval(renderRoom, 15000);
+    groupPollHandle = setInterval(async () => {
+      await syncGroupSelf();
+      await renderRoom();
+    }, 5000); 
     if(window.subscribeGroupRealtime) window.subscribeGroupRealtime(state.groupCode, renderRoom);
   }
   function stopGroupPolling(){
@@ -1281,7 +1404,7 @@
     if(window.unsubscribeGroupRealtime) window.unsubscribeGroupRealtime();
   }
 
-  // ---------- onboarding ----------
+  // ---------- onboarding sync orchestration ----------
   async function maybeOnboard(){
     if(state.id && state.name){
       render();
@@ -1291,23 +1414,55 @@
     openModal('onboardModal');
     document.getElementById('onboardSubmit').onclick = async ()=>{
       const name = document.getElementById('onboardName').value.trim();
+      const password = document.getElementById('onboardPassword').value;
       const goal = parseFloat(document.getElementById('onboardGoal').value) || 4;
-      if(!name) return;
-      state.id = uid(8);
-      state.name = name;
-      state.dailyGoalHours = goal;
+      if(!name) { alert('Please enter a username.'); return; }
+      if(!password) { alert('Please enter a password.'); return; }
+
+      // Global identity scanning via lowercased username values
+      const cloudProfileKey = 'user-profile:' + name.toLowerCase();
+      const cloudCheck = await window.storage.get(cloudProfileKey, true);
+      
+      if (cloudCheck && cloudCheck.value) {
+        const cloudData = JSON.parse(cloudCheck.value);
+        // Verify credentials match
+        if (cloudData.password && cloudData.password !== password) {
+          alert('Incorrect password for this profile username. Please try again.');
+          return;
+        }
+        state = Object.assign(state, cloudData);
+        showToast('Cloud Profile Synced', `Welcome back, ${state.name}!`);
+      } else {
+        state.id = uid(8);
+        state.name = name;
+        state.password = password;
+        state.dailyGoalHours = goal;
+      }
+      
       await saveProfile();
       closeModal('onboardModal');
       render();
+      if(state.groupCode) startGroupPolling();
     };
   }
 
-  // ---------- boot ----------
+  // ---------- initialization loop initialization ----------
   async function boot(){
     wireEvents();
     await loadProfile();
     await maybeOnboard();
-    setInterval(renderCountdown, 1000);
+    
+    // Core Engine Tick Setup
+    setInterval(() => {
+      renderCountdown();
+      if (timer.running) {
+        renderStudyLog();
+      }
+      if (state.groupCode && cachedGroupData) {
+        runRosterDOMEngine(cachedGroupData);
+      }
+    }, 1000);
+
     setInterval(render, 60000);
   }
   boot();
