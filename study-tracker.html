@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STUDYGRID</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Supabase client (only used for shared room data — see the storage bridge script near the bottom of this file) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --bg:#0a0d10;
+    --panel:#11161c;
+    --panel-2:#161e26;
+    --line:#222b34;
+    --line-soft:#1a222a;
+    --text:#e7ecf1;
+    --muted:#7c8a97;
+    --muted-dim:#4d5a66;
+    --teal:#4fe3c1;
+    --teal-glow:rgba(79,227,193,.35);
+    --amber:#f2a93b;
+    --amber-glow:rgba(242,169,59,.35);
+    --violet:#9b8cff;
+    --violet-glow:rgba(155,140,255,.35);
+    --danger:#ff6b6b;
+    --radius:10px;
+    --radius-sm:6px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased;}
+  body{
+    background-image:
+      linear-gradient(var(--line-soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+    background-size:32px 32px;
+    background-position:center top;
+    min-height:100vh;
+  }
+  .mono{ font-family:'JetBrains Mono',monospace; font-feature-settings:"tnum"; }
+  .display{ font-family:'Space Grotesk',sans-serif; }
+  .app{ max-width:1180px; margin:0 auto; padding:20px 20px 100px; }
+
+  /* ---------- topbar ---------- */
+  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:6px 4px 22px; }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand-mark{ width:30px; height:30px; border:1.5px solid var(--teal); border-radius:6px; display:flex; align-items:center; justify-content:center; position:relative; flex-shrink:0;}
+  .brand-mark::before{ content:''; width:8px; height:8px; background:var(--teal); border-radius:1px; box-shadow:0 0 8px var(--teal-glow);}
+  .brand-text{ display:flex; flex-direction:column; line-height:1.1; }
+  .brand-text .name{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:16px; letter-spacing:.5px; }
+  .brand-text .tag{ font-size:10px; color:var(--muted-dim); letter-spacing:1.5px; text-transform:uppercase; }
+  .top-right{ display:flex; align-items:center; gap:10px; }
+  .profile-pill{ display:flex; align-items:center; gap:8px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:6px 12px 6px 6px; cursor:default;}
+  .profile-pill .avatar{ width:24px; height:24px; border-radius:50%; background:linear-gradient(135deg,var(--violet),var(--teal)); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#0a0d10;}
+  .profile-pill .pname{ font-size:13px; font-weight:600; }
+  .profile-pill .plevel{ font-size:10px; color:var(--muted); font-family:'JetBrains Mono',monospace;}
+  .icon-btn{ width:34px; height:34px; border-radius:var(--radius-sm); border:1px solid var(--line); background:var(--panel); color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:.15s; }
+  .icon-btn:hover{ color:var(--text); border-color:var(--muted-dim); }
+
+  /* ---------- hero / global progress ---------- */
+  .hero{ position:relative; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:28px 28px 24px; overflow:hidden; margin-bottom:18px;}
+  .hero::before{
+    content:''; position:absolute; top:0; left:0; right:0; height:1px;
+    background:linear-gradient(90deg, transparent, var(--teal-glow), transparent);
+  }
+  .hero-top{ display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px; margin-bottom:18px;}
+  .eyebrow{ font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--teal); font-weight:600; display:flex; align-items:center; gap:6px;}
+  .eyebrow::before{ content:''; width:6px; height:6px; background:var(--teal); border-radius:50%; box-shadow:0 0 6px var(--teal-glow); }
+  .hero-readout{ display:flex; align-items:baseline; gap:10px; margin-top:6px; flex-wrap:wrap;}
+  .hero-readout .big{ font-family:'JetBrains Mono',monospace; font-size:40px; font-weight:700; letter-spacing:-1px; }
+  .hero-readout .of{ font-family:'JetBrains Mono',monospace; font-size:18px; color:var(--muted); }
+  .hero-stats{ display:flex; gap:22px; flex-wrap:wrap; }
+  .hero-stat{ text-align:right; }
+  .hero-stat .v{ font-family:'JetBrains Mono',monospace; font-size:18px; font-weight:600; color:var(--text); }
+  .hero-stat .l{ font-size:10px; color:var(--muted-dim); text-transform:uppercase; letter-spacing:1px; }
+
+  .trace-wrap{ position:relative; padding-top:4px; }
+  .trace{ position:relative; height:16px; background:var(--panel-2); border:1px solid var(--line); border-radius:4px; overflow:hidden; }
+  .trace.sm{ height:6px; }
+  .trace-fill{ position:absolute; top:0; left:0; bottom:0; width:0%; background:linear-gradient(90deg, transparent, var(--c)); transition:width .8s cubic-bezier(.2,.8,.2,1); }
+  .trace-fill .edge{ position:absolute; right:-1px; top:-4px; bottom:-4px; width:3px; background:var(--c); box-shadow:0 0 10px 2px var(--c-glow); }
+  .trace.sm .trace-fill .edge{ top:-2px; bottom:-2px; width:2px; }
+  .ticks{ position:relative; height:18px; margin-top:4px; }
+  .tick{ position:absolute; top:0; width:1px; height:6px; background:var(--line); }
+  .tick.major{ height:9px; background:var(--muted-dim); }
+  .tick-label{ position:absolute; top:8px; transform:translateX(-50%); font-size:9px; font-family:'JetBrains Mono',monospace; color:var(--muted-dim); }
+
+  /* ---------- grid main ---------- */
+  .grid-main{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+  @media (max-width:760px){ .grid-main{ grid-template-columns:1fr; } }
+
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:20px; display:flex; flex-direction:column; }
+  .card-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:10px; }
+  .card-title{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; letter-spacing:.3px; }
+  .card-sub{ font-size:10px; color:var(--muted-dim); letter-spacing:1px; text-transform:uppercase; margin-top:1px; }
+
+  /* daily */
+  .daily-readout{ font-family:'JetBrains Mono',monospace; font-size:26px; font-weight:700; margin-bottom:2px; }
+  .daily-of{ font-size:12px; color:var(--muted); font-family:'JetBrains Mono',monospace; margin-bottom:12px; }
+  .reset-countdown{ margin-top:14px; font-size:11px; color:var(--muted-dim); display:flex; justify-content:space-between; align-items:center; }
+  .reset-countdown .t{ font-family:'JetBrains Mono',monospace; color:var(--amber); font-weight:600; }
+  .goal-met{ display:none; align-items:center; gap:6px; font-size:11px; color:var(--teal); font-weight:600; margin-top:14px; letter-spacing:.5px; }
+  .goal-met.show{ display:flex; }
+
+  /* level */
+  .level-top{ display:flex; align-items:center; gap:14px; margin-bottom:14px; }
+  .level-ring{ width:54px; height:54px; border-radius:50%; border:3px solid var(--line); display:flex; align-items:center; justify-content:center; position:relative; flex-shrink:0;}
+  .level-ring .num{ font-family:'JetBrains Mono',monospace; font-weight:700; font-size:18px; }
+  .level-ring::before{ content:''; position:absolute; inset:-3px; border-radius:50%; border:3px solid var(--violet); border-right-color:transparent; border-bottom-color:transparent; transform:rotate(45deg);}
+  .level-title{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:15px; }
+  .level-xp{ font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace; margin-top:2px;}
+  .xp-to-next{ font-size:10px; color:var(--muted-dim); text-align:right; margin-top:6px; }
+
+  /* room */
+  .room-card{ margin-bottom:16px; }
+  .room-empty{ display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:10px; padding:30px 0; }
+  .room-empty p{ font-size:12px; color:var(--muted); max-width:280px; line-height:1.5; }
+  .group-code-display{ font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--teal); background:var(--panel-2); border:1px solid var(--line); padding:4px 10px; border-radius:999px; letter-spacing:1px; }
+  .room-grid{ display:grid; grid-template-columns:1.3fr 1fr; gap:20px; }
+  @media (max-width:760px){ .room-grid{ grid-template-columns:1fr; } }
+  .room-pane-title{ font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--muted-dim); margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; }
+  .roster{ display:flex; flex-direction:column; gap:10px; overflow-y:auto; max-height:320px; padding-right:2px;}
+  .roster-row{ display:flex; align-items:center; gap:10px; padding:9px; border-radius:var(--radius-sm); border:1px solid transparent; }
+  .roster-row.me{ border-color:var(--line); background:var(--panel-2); }
+  .rank{ width:18px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted-dim); text-align:center; flex-shrink:0;}
+  .rank.r1{ color:#ffd56b; } .rank.r2{ color:#c9d3dc; } .rank.r3{ color:#e0995f; }
+  .r-avatar{ width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,var(--violet),var(--teal)); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:#0a0d10; flex-shrink:0; position:relative;}
+  .status-dot{ position:absolute; bottom:-2px; right:-2px; width:8px; height:8px; border-radius:50%; border:2px solid var(--panel); }
+  .status-dot.live{ background:var(--teal); }
+  .status-dot.today{ background:var(--amber); }
+  .status-dot.idle{ background:var(--muted-dim); }
+  .r-info{ flex:1; min-width:0; }
+  .r-name{ font-size:12px; font-weight:600; display:flex; align-items:center; gap:6px; }
+  .r-name .you-tag{ font-size:8px; color:var(--teal); border:1px solid var(--teal); border-radius:3px; padding:1px 4px; letter-spacing:.5px; }
+  .r-meta{ font-size:10px; color:var(--muted-dim); margin-top:2px; }
+  .r-bar{ height:4px; background:var(--panel-2); border-radius:2px; margin-top:5px; overflow:hidden; }
+  .r-bar-fill{ height:100%; background:var(--teal); }
+  .r-hours{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); flex-shrink:0; width:54px; text-align:right;}
+
+  .resource-row{ display:flex; align-items:flex-start; gap:10px; padding:9px; border-radius:var(--radius-sm); background:var(--panel-2); border:1px solid var(--line); margin-bottom:8px; }
+  .resource-icon{ width:26px; height:26px; border-radius:var(--radius-sm); background:var(--bg); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; color:var(--teal); }
+  .resource-info{ flex:1; min-width:0; }
+  .resource-title{ font-size:12px; font-weight:600; display:block; text-decoration:none; color:var(--text); word-break:break-word;}
+  .resource-title:hover{ color:var(--teal); }
+  .resource-meta{ font-size:10px; color:var(--muted-dim); margin-top:2px; }
+  .resources-list{ max-height:320px; overflow-y:auto; padding-right:2px; }
+  .empty-mini{ font-size:11px; color:var(--muted-dim); padding:8px 0; }
+
+  /* study log / notes */
+  .log-row{ display:flex; gap:12px; padding:12px 0; border-bottom:1px solid var(--line-soft); }
+  .log-row:last-child{ border-bottom:none; }
+  .log-row .ld-date{ width:74px; flex-shrink:0; font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--muted-dim); line-height:1.4; padding-top:1px;}
+  .log-row .ld-hours{ width:48px; flex-shrink:0; font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600; color:var(--teal); }
+  .log-row .ld-note{ flex:1; font-size:12.5px; color:var(--text); line-height:1.4; }
+  .log-row .ld-note.empty{ color:var(--muted-dim); font-style:italic; }
+  .log-row .ld-note .who{ color:var(--teal); font-weight:600; font-style:normal; }
+  .studylog-empty{ font-size:12px; color:var(--muted); padding:16px 0; text-align:center; }
+
+  /* room-wide study log feed */
+  .room-activity-list{ max-height:280px; overflow-y:auto; padding-right:2px; }
+
+  /* ---------- buttons / inputs ---------- */
+  .btn{ font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600; border-radius:var(--radius-sm); border:1px solid var(--line); background:var(--panel-2); color:var(--text); padding:9px 14px; cursor:pointer; transition:.15s; }
+  .btn:hover{ border-color:var(--muted-dim); }
+  .btn-primary{ background:var(--teal); color:#06120f; border-color:var(--teal); }
+  .btn-primary:hover{ box-shadow:0 0 14px var(--teal-glow); }
+  .btn-ghost{ background:transparent; }
+  .btn-block{ width:100%; }
+  .btn-sm{ padding:6px 10px; font-size:11px; }
+  input[type="text"], input[type="number"], input[type="url"], textarea{
+    width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius-sm);
+    color:var(--text); padding:10px 12px; font-family:'JetBrains Mono',monospace; font-size:13px; resize:vertical;
+  }
+  textarea{ font-family:'Inter',sans-serif; font-size:13px; min-height:64px; }
+  input::placeholder, textarea::placeholder{ color:var(--muted-dim); font-family:'Inter',sans-serif; }
+  label.field-label{ font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted-dim); display:block; margin-bottom:6px; }
+  .field{ margin-bottom:14px; }
+  .chip-row{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .chip{ font-family:'JetBrains Mono',monospace; font-size:11px; padding:5px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); cursor:pointer; }
+  .chip:hover{ color:var(--text); border-color:var(--muted-dim); }
+
+  /* ---------- log dock ---------- */
+  .log-dock{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:8px 8px 8px 18px; display:flex; align-items:center; gap:10px; box-shadow:0 10px 30px rgba(0,0,0,.5); z-index:40; }
+  .log-dock .timer-display{ font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:600; min-width:70px; }
+  .log-dock .timer-display.running{ color:var(--teal); }
+  .dot-live{ width:7px; height:7px; border-radius:50%; background:var(--teal); box-shadow:0 0 8px var(--teal-glow); display:none; }
+  .dot-live.show{ display:inline-block; animation:pulse 1.4s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.3;} }
+
+  /* ---------- modal ---------- */
+  .modal-bg{ position:fixed; inset:0; background:rgba(5,7,9,.7); backdrop-filter:blur(3px); display:none; align-items:center; justify-content:center; z-index:100; padding:20px;}
+  .modal-bg.show{ display:flex; }
+  .modal{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:26px; width:100%; max-width:400px; max-height:90vh; overflow-y:auto;}
+  .modal-title{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:17px; margin-bottom:4px; }
+  .modal-desc{ font-size:12px; color:var(--muted); margin-bottom:18px; line-height:1.5; }
+  .modal-actions{ display:flex; gap:8px; margin-top:6px; }
+  .modal-foot-link{ font-size:11px; color:var(--muted-dim); text-align:center; margin-top:14px; cursor:pointer; }
+  .modal-foot-link:hover{ color:var(--muted); }
+  .tabs{ display:flex; gap:4px; background:var(--panel-2); border-radius:var(--radius-sm); padding:3px; margin-bottom:16px;}
+  .tab{ flex:1; text-align:center; font-size:11px; padding:7px; border-radius:5px; cursor:pointer; color:var(--muted); font-weight:600; }
+  .tab.active{ background:var(--panel); color:var(--text); }
+  .notice{ font-size:10.5px; color:var(--muted-dim); background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius-sm); padding:9px 10px; line-height:1.45; margin-top:4px;}
+  .divider{ height:1px; background:var(--line); margin:18px 0; }
+  .settings-row-actions{ display:flex; gap:8px; }
+
+  .toast{ position:fixed; top:18px; right:18px; left:18px; max-width:320px; margin-left:auto; background:var(--panel); border:1px solid var(--teal); border-radius:var(--radius-sm); padding:12px 16px; font-size:12px; z-index:200; box-shadow:0 0 20px var(--teal-glow); opacity:0; transform:translateY(-10px); transition:.3s; pointer-events:none;}
+  .toast.show{ opacity:1; transform:translateY(0); }
+  .toast .tt{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:13px; color:var(--teal); margin-bottom:2px;}
+
+  ::-webkit-scrollbar{ width:6px; } ::-webkit-scrollbar-thumb{ background:var(--line); border-radius:3px; }
+  :focus-visible{ outline:2px solid var(--teal); outline-offset:2px; }
+
+  /* ---------- full-screen timer hero ---------- */
+  .timer-hero{
+    position:relative;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    margin-bottom:18px;
+    overflow:hidden;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:280px;
+    padding:40px 28px;
+  }
+  .timer-hero::before{
+    content:'';
+    position:absolute; inset:0;
+    background:radial-gradient(ellipse 70% 70% at 50% 50%, rgba(79,227,193,.04), transparent);
+    pointer-events:none;
+  }
+  .timer-hero::after{
+    content:'';
+    position:absolute; top:0; left:0; right:0; height:1px;
+    background:linear-gradient(90deg, transparent, var(--teal-glow), transparent);
+  }
+  .timer-hero.running{
+    border-color:rgba(79,227,193,.35);
+    box-shadow:0 0 40px rgba(79,227,193,.06);
+  }
+  .timer-hero-inner{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:16px;
+    text-align:center;
+    position:relative;
+    z-index:1;
+  }
+  .timer-eyebrow{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:11px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:var(--muted-dim);
+    font-weight:600;
+  }
+  .timer-eyebrow .dot-live{ flex-shrink:0; }
+  #timerStatusLabel.live{ color:var(--teal); }
+  .timer-clock{
+    font-size:clamp(56px, 10vw, 88px);
+    font-weight:700;
+    letter-spacing:-2px;
+    color:var(--text);
+    line-height:1;
+    transition:color .3s;
+  }
+  .timer-clock.running{ color:var(--teal); text-shadow:0 0 40px var(--teal-glow); }
+  .timer-sub{
+    font-size:13px;
+    color:var(--muted);
+    max-width:340px;
+    line-height:1.5;
+  }
+  .timer-actions{ display:flex; gap:10px; margin-top:4px; }
+  .timer-btn-start{
+    font-size:14px;
+    font-weight:700;
+    padding:13px 36px;
+    border-radius:999px;
+    background:var(--teal);
+    color:#06120f;
+    border:none;
+    cursor:pointer;
+    letter-spacing:.5px;
+    transition:.2s;
+    font-family:'Space Grotesk',sans-serif;
+  }
+  .timer-btn-start:hover{ box-shadow:0 0 24px var(--teal-glow); transform:scale(1.03); }
+  .timer-btn-stop{
+    font-size:14px;
+    font-weight:700;
+    padding:13px 36px;
+    border-radius:999px;
+    background:transparent;
+    color:var(--danger);
+    border:1.5px solid var(--danger);
+    cursor:pointer;
+    letter-spacing:.5px;
+    transition:.2s;
+    font-family:'Space Grotesk',sans-serif;
+  }
+  .timer-btn-stop:hover{ background:rgba(255,107,107,.1); }
+
+  /* live ring pulse around clock */
+  .timer-ring{
+    position:absolute;
+    inset:-24px;
+    border-radius:50%;
+    border:1.5px solid var(--teal-glow);
+    display:none;
+    animation:ringPulse 2s infinite;
+  }
+  .timer-hero.running .timer-ring{ display:block; }
+  @keyframes ringPulse{ 0%,100%{opacity:.5;transform:scale(1);} 50%{opacity:.1;transform:scale(1.04);} }
+
+  /* session time badge in modal */
+  .session-time-badge{
+    display:block;
+    text-align:center;
+    font-size:38px;
+    font-weight:700;
+    color:var(--teal);
+    letter-spacing:-1px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px;
+    margin-bottom:16px;
+    text-shadow:0 0 20px var(--teal-glow);
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div class="brand-text">
+        <span class="name">STUDYGRID</span>
+        <span class="tag">3000HR Mission Tracker</span>
+      </div>
+    </div>
+    <div class="top-right">
+      <div class="profile-pill" id="profilePill">
+        <div class="avatar" id="pillAvatar">—</div>
+        <div>
+          <div class="pname" id="pillName">—</div>
+          <div class="plevel" id="pillLevel">LV.1</div>
+        </div>
+      </div>
+      <div class="icon-btn" id="settingsBtn" title="Settings">⚙</div>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-top">
+      <div>
+        <div class="eyebrow">Mission · 3000 Hours</div>
+        <div class="hero-readout">
+          <span class="big mono" id="heroHours">0</span>
+          <span class="of mono">/ 3,000 HRS</span>
+        </div>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat"><div class="v mono" id="heroPct">0%</div><div class="l">Complete</div></div>
+        <div class="hero-stat"><div class="v mono" id="heroRemain">3,000</div><div class="l">Hrs Remaining</div></div>
+        <div class="hero-stat"><div class="v mono" id="heroAvg">0.0</div><div class="l">Avg Hrs / Day</div></div>
+      </div>
+    </div>
+    <div class="trace-wrap">
+      <div class="trace"><div class="trace-fill" id="heroTrace" style="--c:var(--teal); --c-glow:var(--teal-glow);"><div class="edge"></div></div></div>
+      <div class="ticks" id="heroTicks"></div>
+    </div>
+  </div>
+
+  <!-- TIMER -->
+  <div class="timer-hero" id="timerHero">
+    <div class="timer-hero-inner">
+      <div class="timer-eyebrow">
+        <span class="dot-live" id="dockDot"></span>
+        <span id="timerStatusLabel">READY</span>
+      </div>
+      <div style="position:relative; display:inline-block;">
+        <div class="timer-clock mono" id="timerDisplay">00:00:00</div>
+      </div>
+      <div class="timer-sub" id="timerSub">Start a session to begin tracking live time</div>
+      <div class="timer-actions">
+        <button class="btn timer-btn-start" id="timerToggle">▶ Start Session</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-main">
+
+    <!-- DAILY GOAL -->
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Daily Goal</div>
+          <div class="card-sub" id="dailyDateLabel">—</div>
+        </div>
+      </div>
+      <div class="daily-readout mono" id="dailyHours">0.0h</div>
+      <div class="daily-of" id="dailyOf">/ 4.0h goal</div>
+      <div class="trace"><div class="trace-fill" id="dailyTrace" style="--c:var(--amber); --c-glow:var(--amber-glow);"><div class="edge"></div></div></div>
+      <div class="goal-met" id="goalMetTag">⬢ DAILY GOAL CLEARED</div>
+      <div class="reset-countdown">
+        <span>Resets in</span>
+        <span class="t mono" id="resetCountdown">--:--:--</span>
+      </div>
+    </div>
+
+    <!-- LEVEL -->
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Operator Level</div>
+          <div class="card-sub">XP from study hours</div>
+        </div>
+      </div>
+      <div class="level-top">
+        <div class="level-ring"><span class="num mono" id="levelNum">1</span></div>
+        <div>
+          <div class="level-title" id="levelTitle">Trainee Engineer</div>
+          <div class="level-xp" id="levelXp">0 / 500 XP</div>
+        </div>
+      </div>
+      <div class="trace"><div class="trace-fill" id="xpTrace" style="--c:var(--violet); --c-glow:var(--violet-glow);"><div class="edge"></div></div></div>
+      <div class="xp-to-next" id="xpToNext">500 XP to next level</div>
+    </div>
+
+  </div>
+
+  <!-- ROOM -->
+  <div class="card room-card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Room</div>
+        <div class="card-sub" id="squadSub">No room joined</div>
+      </div>
+      <span class="group-code-display" id="groupCodeDisplay" style="display:none;"></span>
+    </div>
+
+    <div class="room-empty" id="friendsEmpty">
+      <p>Join or start a room to compare progress and trade study material with other engineers grinding toward 3,000 hours.</p>
+      <button class="btn btn-primary" id="openGroupModalBtn">Join / Create Room</button>
+    </div>
+
+    <div class="room-grid" id="roomGrid" style="display:none;">
+      <div>
+        <div class="room-pane-title">Members</div>
+        <div class="roster" id="roster"></div>
+      </div>
+      <div>
+        <div class="room-pane-title">
+          <span>Shared resources</span>
+          <button class="btn btn-sm" id="addResourceBtn">+ Add link</button>
+        </div>
+        <div class="resources-list" id="resourcesList"></div>
+      </div>
+      <div style="grid-column:1 / -1;">
+        <div class="room-pane-title" style="margin-top:6px;">
+          <span>Room study log</span>
+          <span style="text-transform:none; letter-spacing:0; font-size:10px;">what everyone's been working on</span>
+        </div>
+        <div class="room-activity-list" id="roomActivityList"></div>
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="leaveGroupBtn" style="display:none; margin-top:14px; width:fit-content;">Leave room</button>
+  </div>
+
+  <!-- STUDY LOG / NOTES -->
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Study Log</div>
+        <div class="card-sub">What you've been working on</div>
+      </div>
+    </div>
+    <div id="studyLogList"><div class="studylog-empty">No sessions logged yet. Log your first hours below.</div></div>
+  </div>
+
+</div>
+
+<!-- ONBOARDING MODAL -->
+<div class="modal-bg" id="onboardModal">
+  <div class="modal">
+    <div class="modal-title">Welcome to STUDYGRID</div>
+    <div class="modal-desc">Set up your operator profile before launching the mission tracker.</div>
+    <div class="field">
+      <label class="field-label">Your name</label>
+      <input type="text" id="onboardName" placeholder="e.g. Leo" maxlength="20">
+    </div>
+    <div class="field">
+      <label class="field-label">Daily study goal (hours)</label>
+      <input type="number" id="onboardGoal" value="4" min="0.5" step="0.5">
+    </div>
+    <button class="btn btn-primary btn-block" id="onboardSubmit">Launch tracker</button>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal-bg" id="settingsModal">
+  <div class="modal">
+    <div class="modal-title">Settings</div>
+    <div class="field">
+      <label class="field-label">Your name</label>
+      <input type="text" id="settingsName" maxlength="20">
+    </div>
+    <div class="field">
+      <label class="field-label">Daily study goal (hours)</label>
+      <input type="number" id="settingsGoal" min="0.5" step="0.5">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-block" id="settingsCancel">Cancel</button>
+      <button class="btn btn-primary btn-block" id="settingsSave">Save</button>
+    </div>
+
+    <div class="divider"></div>
+    <label class="field-label">Backup</label>
+    <div class="notice" style="margin-bottom:10px;">Your progress already autosaves to your account. For an extra copy in Google Drive, export a backup file below and upload it to Drive yourself — a real Drive sign-in isn't possible from inside this app.</div>
+    <div class="settings-row-actions">
+      <button class="btn btn-block btn-sm" id="exportBtn">Export backup</button>
+      <button class="btn btn-block btn-sm" id="importBtn">Import backup</button>
+    </div>
+    <input type="file" id="importFile" accept="application/json" style="display:none;">
+
+    <div class="modal-foot-link" id="resetDataBtn">Reset all my data</div>
+  </div>
+</div>
+
+<!-- SESSION LOG MODAL (timer-only, no manual hours) -->
+<div class="modal-bg" id="logModal">
+  <div class="modal">
+    <div class="modal-title" id="logModalTitle">Save your session</div>
+    <div class="modal-desc" id="logModalDesc">Session complete. Add a note about what you studied.</div>
+    <div class="session-time-badge mono" id="logTimeBadge">00:00:00</div>
+    <div class="field">
+      <label class="field-label">What did you study?</label>
+      <textarea id="logNoteInput" placeholder="e.g. Thermodynamics — Ch.4 problem set, GATE PYQs 2018-2020" style="min-height:90px;"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-block" id="logCancel">Discard session</button>
+      <button class="btn btn-primary btn-block" id="logSubmit">Save session</button>
+    </div>
+  </div>
+</div>
+
+<!-- GROUP MODAL -->
+<div class="modal-bg" id="groupModal">
+  <div class="modal">
+    <div class="modal-title">Set up a room</div>
+    <div class="modal-desc">Track progress side-by-side with friends preparing for the same exam.</div>
+    <div class="tabs">
+      <div class="tab active" data-tab="join">Join existing</div>
+      <div class="tab" data-tab="create">Create new</div>
+    </div>
+    <div id="joinPane">
+      <div class="field">
+        <label class="field-label">Room code</label>
+        <input type="text" id="joinCodeInput" placeholder="e.g. K2X9" maxlength="6" style="text-transform:uppercase;">
+      </div>
+    </div>
+    <div id="createPane" style="display:none;">
+      <div class="field">
+        <label class="field-label">Room name</label>
+        <input type="text" id="createNameInput" placeholder="e.g. BUET Grinders" maxlength="24">
+      </div>
+    </div>
+    <div class="notice">Your name, study hours, and status become visible to anyone with this room's code. Only share it with people you trust.</div>
+    <div class="modal-actions" style="margin-top:14px;">
+      <button class="btn btn-block" id="groupCancel">Cancel</button>
+      <button class="btn btn-primary btn-block" id="groupSubmit">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD RESOURCE MODAL -->
+<div class="modal-bg" id="resourceModal">
+  <div class="modal">
+    <div class="modal-title">Share a resource</div>
+    <div class="modal-desc">Paste a link to a PDF, Drive doc, or notes folder for your room.</div>
+    <div class="field">
+      <label class="field-label">Title</label>
+      <input type="text" id="resourceTitleInput" placeholder="e.g. Fluid Mechanics formula sheet" maxlength="60">
+    </div>
+    <div class="field">
+      <label class="field-label">Link</label>
+      <input type="url" id="resourceUrlInput" placeholder="https://drive.google.com/...">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-block" id="resourceCancel">Cancel</button>
+      <button class="btn btn-primary btn-block" id="resourceSubmit">Share</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <div class="tt" id="toastTitle">Level up</div>
+  <div id="toastBody"></div>
+</div>
+
+<!--
+  ============================================================
+  DEPLOYMENT SETUP — read this before pushing to Vercel/GitHub
+  ============================================================
+  This file no longer needs main.js or preload.js to run — those
+  were only for the Electron desktop build. In a browser, this
+  script below provides window.storage itself:
+    - Personal data (your hours, XP, notes)  -> browser localStorage
+    - Room data (shared with friends)        -> Supabase
+
+  STEP 1 — Create a free project at https://supabase.com
+
+  STEP 2 — In the Supabase SQL editor, run:
+
+    create table if not exists studygrid_kv (
+      key text primary key,
+      value jsonb not null,
+      updated_at timestamptz not null default now()
+    );
+
+    alter table studygrid_kv enable row level security;
+
+    create policy "public read"   on studygrid_kv for select using (true);
+    create policy "public insert" on studygrid_kv for insert with check (true);
+    create policy "public update" on studygrid_kv for update using (true);
+    create policy "public delete" on studygrid_kv for delete using (true);
+
+    -- enables instant live updates for room members (optional but recommended)
+    alter publication supabase_realtime add table studygrid_kv;
+
+  Note: these policies allow anyone with your project URL/key to read
+  and write any room — the same trust level as the desktop version,
+  where anyone with file access to the storage folder could edit any
+  room. Fine for a small group of friends; if you want it locked down
+  further later, that needs real Supabase Auth and per-room policies.
+
+  STEP 3 — In Supabase, go to Project Settings -> API and copy your
+  "Project URL" and "anon public" key into the two constants right
+  below (SUPABASE_URL / SUPABASE_ANON_KEY).
+
+  STEP 4 — Push this repo to GitHub, then import it on vercel.com
+  ("Add New Project" -> select the repo -> Deploy). No build command
+  or framework preset is needed — it's a static HTML file.
+-->
+<script>
+  const SUPABASE_URL = 'YOUR_SUPABASE_PROJECT_URL';       // e.g. https://abcdefgh.supabase.co
+  const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';     // the "anon public" key, safe to expose client-side
+
+  let sb = null;
+  if (SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_URL.startsWith('YOUR_') && window.supabase) {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  } else {
+    console.warn('STUDYGRID: Supabase is not configured yet — personal tracking will work, but Room features (join/create/sync) will not until you fill in SUPABASE_URL and SUPABASE_ANON_KEY near the top of the script.');
+  }
+
+  async function sbGet(key){
+    if(!sb) return null;
+    try{
+      const { data, error } = await sb.from('studygrid_kv').select('value').eq('key', key).maybeSingle();
+      if(error || !data) return null;
+      return { value: JSON.stringify(data.value) };
+    }catch(e){ console.error('Supabase get failed:', e); return null; }
+  }
+  async function sbSet(key, valueString){
+    if(!sb) return false;
+    try{
+      const { error } = await sb.from('studygrid_kv').upsert({ key, value: JSON.parse(valueString), updated_at: new Date().toISOString() });
+      return !error;
+    }catch(e){ console.error('Supabase set failed:', e); return false; }
+  }
+  async function sbDelete(key){
+    if(!sb) return false;
+    try{
+      const { error } = await sb.from('studygrid_kv').delete().eq('key', key);
+      return !error;
+    }catch(e){ console.error('Supabase delete failed:', e); return false; }
+  }
+
+  // Same get/set/delete(key, isGlobal) shape preload.js used to expose —
+  // everything else in the app below is unchanged.
+  window.storage = {
+    async get(key, isGlobal){
+      if(isGlobal) return sbGet(key);
+      try{ const v = localStorage.getItem(key); return v!==null ? { value: v } : null; }
+      catch(e){ console.error('localStorage get failed:', e); return null; }
+    },
+    async set(key, value, isGlobal){
+      if(isGlobal) return sbSet(key, value);
+      try{ localStorage.setItem(key, value); return true; }
+      catch(e){ console.error('localStorage set failed:', e); return false; }
+    },
+    async delete(key, isGlobal){
+      if(isGlobal) return sbDelete(key);
+      try{ localStorage.removeItem(key); return true; }
+      catch(e){ console.error('localStorage delete failed:', e); return false; }
+    }
+  };
+
+  // Optional: instant room updates instead of waiting for the 15s poll.
+  // Exposed on window so the main app script can call it once a room is joined.
+  let groupRealtimeChannel = null;
+  window.subscribeGroupRealtime = function(groupCode, onChange){
+    if(!sb) return;
+    if(groupRealtimeChannel){ sb.removeChannel(groupRealtimeChannel); groupRealtimeChannel = null; }
+    if(!groupCode) return;
+    groupRealtimeChannel = sb.channel('room-'+groupCode)
+      .on('postgres_changes', { event:'*', schema:'public', table:'studygrid_kv', filter:'key=eq.group:'+groupCode }, onChange)
+      .subscribe();
+  };
+  window.unsubscribeGroupRealtime = function(){
+    if(sb && groupRealtimeChannel){ sb.removeChannel(groupRealtimeChannel); groupRealtimeChannel = null; }
+  };
+</script>
+
+<script>
+(function(){
+  const GOAL_TOTAL = 3000;
+  const XP_PER_HOUR = 100;
+  const STORAGE_KEY = 'profile-and-stats';
+
+  const LEVEL_TITLES = [
+    {min:1,max:2,title:'Trainee Engineer'},
+    {min:3,max:5,title:'Circuit Apprentice'},
+    {min:6,max:9,title:'Systems Analyst'},
+    {min:10,max:14,title:'Senior Engineer'},
+    {min:15,max:20,title:'Lead Architect'},
+    {min:21,max:999,title:'Principal Engineer'},
+  ];
+
+  let state = {
+    id: null, name: '', dailyGoalHours: 4,
+    totalHours: 0, totalXP: 0,
+    dailyLog: {}, sessionHistory: [],
+    groupCode: null, groupName: null
+  };
+
+  let timer = { running:false, startedAt:null, tickHandle:null };
+  let groupPollHandle = null;
+  let pendingTimerHours = null;
+
+  // ---------- utils ----------
+  function uid(len){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<len;i++) s+=c[Math.floor(Math.random()*c.length)]; return s; }
+  function localDateKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function fmtHours(h){ return (Math.round(h*10)/10).toFixed(1); }
+  function clamp(n,a,b){ return Math.max(a,Math.min(b,n)); }
+  function initials(name){ return (name||'?').trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
+  function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+  function timeAgo(ts){
+    if(!ts) return 'never';
+    const diff = Date.now()-ts;
+    if(diff < 5*60000) return 'active now';
+    if(diff < 3600000) return Math.floor(diff/60000)+'m ago';
+    if(diff < 86400000) return Math.floor(diff/3600000)+'h ago';
+    return Math.floor(diff/86400000)+'d ago';
+  }
+
+  function getLevelInfo(xp){
+    let level=1, cumulative=0, need=500;
+    while(xp >= cumulative+need){
+      cumulative += need; level++; need = 500 + (level-1)*250;
+    }
+    const into = xp - cumulative;
+    const titleObj = LEVEL_TITLES.find(t=>level>=t.min && level<=t.max) || LEVEL_TITLES[LEVEL_TITLES.length-1];
+    return { level, into, need, title: titleObj.title };
+  }
+
+  // ---------- storage ----------
+  async function loadProfile(){
+    try{
+      const r = await window.storage.get(STORAGE_KEY, false);
+      if(r && r.value){
+        const data = JSON.parse(r.value);
+        state = Object.assign(state, data);
+        return true;
+      }
+    }catch(e){ /* no profile yet */ }
+    return false;
+  }
+
+  async function saveProfile(){
+    try{
+      await window.storage.set(STORAGE_KEY, JSON.stringify(state), false);
+    }catch(e){ console.error('save failed', e); }
+  }
+
+  async function syncGroupSelf(){
+    if(!state.groupCode) return;
+    const key = 'group:'+state.groupCode;
+    try{
+      let cur = { name: state.groupName || state.groupCode, members:{}, resources:[] };
+      try{
+        const r = await window.storage.get(key, true);
+        if(r && r.value) cur = JSON.parse(r.value);
+      }catch(e){ /* group doesn't exist yet, will create */ }
+      const lvl = getLevelInfo(state.totalXP);
+      const today = localDateKey();
+      cur.members = cur.members || {};
+      cur.resources = cur.resources || [];
+      cur.members[state.id] = {
+        name: state.name, totalHours: state.totalHours,
+        level: lvl.level, title: lvl.title,
+        todayHours: state.dailyLog[today]||0,
+        dailyGoalHours: state.dailyGoalHours,
+        lastActive: Date.now(),
+        recentLog: (state.sessionHistory||[]).slice(0,5).map(s=>({ ts: s.ts, hours: s.hours, note: (s.note||'').slice(0,200) }))
+      };
+      if(state.groupName) cur.name = state.groupName;
+      await window.storage.set(key, JSON.stringify(cur), true);
+    }catch(e){ console.error('group sync failed', e); }
+  }
+
+  async function fetchGroup(){
+    if(!state.groupCode) return null;
+    try{
+      const r = await window.storage.get('group:'+state.groupCode, true);
+      if(r && r.value) return JSON.parse(r.value);
+    }catch(e){ return null; }
+    return null;
+  }
+
+  async function addResourceToGroup(title, url){
+    if(!state.groupCode) return;
+    const key = 'group:'+state.groupCode;
+    try{
+      let cur = { name: state.groupName || state.groupCode, members:{}, resources:[] };
+      try{
+        const r = await window.storage.get(key, true);
+        if(r && r.value) cur = JSON.parse(r.value);
+      }catch(e){}
+      cur.resources = cur.resources || [];
+      cur.resources.unshift({ id: uid(6), title, url, addedBy: state.id, addedByName: state.name, ts: Date.now() });
+      cur.resources = cur.resources.slice(0,30);
+      await window.storage.set(key, JSON.stringify(cur), true);
+    }catch(e){ console.error('resource share failed', e); }
+  }
+
+  // ---------- toast ----------
+  let toastTimeout;
+  function showToast(title, body){
+    const el = document.getElementById('toast');
+    document.getElementById('toastTitle').textContent = title;
+    document.getElementById('toastBody').textContent = body;
+    el.classList.add('show');
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(()=>el.classList.remove('show'), 3600);
+  }
+
+  // ---------- render ----------
+  function renderTicks(container, totalMax, stepMinor, stepMajor){
+    container.innerHTML = '';
+    for(let v=stepMinor; v<=totalMax; v+=stepMinor){
+      const pct = (v/totalMax)*100;
+      const isMajor = v % stepMajor === 0;
+      const t = document.createElement('div');
+      t.className = 'tick' + (isMajor ? ' major' : '');
+      t.style.left = pct+'%';
+      container.appendChild(t);
+      if(isMajor){
+        const lbl = document.createElement('div');
+        lbl.className = 'tick-label';
+        lbl.style.left = pct+'%';
+        lbl.textContent = v>=1000 ? (v/1000)+'k' : v;
+        container.appendChild(lbl);
+      }
+    }
+  }
+
+  function render(){
+    document.getElementById('pillAvatar').textContent = initials(state.name);
+    document.getElementById('pillName').textContent = state.name || 'Operator';
+    const lvl = getLevelInfo(state.totalXP);
+    document.getElementById('pillLevel').textContent = 'LV.'+lvl.level;
+
+    const pct = clamp((state.totalHours/GOAL_TOTAL)*100, 0, 100);
+    document.getElementById('heroHours').textContent = Number(fmtHours(state.totalHours)).toLocaleString(undefined, {minimumFractionDigits:1, maximumFractionDigits:1});
+    document.getElementById('heroPct').textContent = pct.toFixed(1)+'%';
+    document.getElementById('heroRemain').textContent = Math.max(0, Math.round(GOAL_TOTAL-state.totalHours)).toLocaleString();
+    const daysActive = Math.max(1, Object.keys(state.dailyLog).length);
+    document.getElementById('heroAvg').textContent = (state.totalHours/daysActive).toFixed(1);
+    document.getElementById('heroTrace').style.width = pct+'%';
+    renderTicks(document.getElementById('heroTicks'), GOAL_TOTAL, 250, 1000);
+
+    const today = localDateKey();
+    const todayHours = state.dailyLog[today] || 0;
+    const dailyPct = clamp((todayHours/state.dailyGoalHours)*100, 0, 100);
+    document.getElementById('dailyDateLabel').textContent = new Date().toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
+    document.getElementById('dailyHours').textContent = fmtHours(todayHours)+'h';
+    document.getElementById('dailyOf').textContent = '/ '+fmtHours(state.dailyGoalHours)+'h goal';
+    document.getElementById('dailyTrace').style.width = dailyPct+'%';
+    document.getElementById('goalMetTag').classList.toggle('show', todayHours >= state.dailyGoalHours);
+
+    document.getElementById('levelNum').textContent = lvl.level;
+    document.getElementById('levelTitle').textContent = lvl.title;
+    document.getElementById('levelXp').textContent = lvl.into+' / '+lvl.need+' XP';
+    document.getElementById('xpTrace').style.width = clamp((lvl.into/lvl.need)*100,0,100)+'%';
+    document.getElementById('xpToNext').textContent = (lvl.need-lvl.into)+' XP to next level';
+
+    renderCountdown();
+    renderGroupShell();
+    renderStudyLog();
+  }
+
+  function renderCountdown(){
+    const now = new Date();
+    const next = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0,0,0);
+    let diff = next - now;
+    const h = String(Math.floor(diff/3600000)).padStart(2,'0');
+    const m = String(Math.floor((diff%3600000)/60000)).padStart(2,'0');
+    const s = String(Math.floor((diff%60000)/1000)).padStart(2,'0');
+    document.getElementById('resetCountdown').textContent = h+':'+m+':'+s;
+  }
+
+  function renderGroupShell(){
+    const inGroup = !!state.groupCode;
+    document.getElementById('friendsEmpty').style.display = inGroup ? 'none' : 'flex';
+    document.getElementById('roomGrid').style.display = inGroup ? 'grid' : 'none';
+    document.getElementById('leaveGroupBtn').style.display = inGroup ? 'block' : 'none';
+    const codeEl = document.getElementById('groupCodeDisplay');
+    if(inGroup){
+      codeEl.style.display = 'inline-block';
+      codeEl.textContent = state.groupCode;
+      document.getElementById('squadSub').textContent = state.groupName || 'Active room';
+    } else {
+      codeEl.style.display = 'none';
+      document.getElementById('squadSub').textContent = 'No room joined';
+    }
+  }
+
+  function renderStudyLog(){
+    const list = document.getElementById('studyLogList');
+    if(!state.sessionHistory || state.sessionHistory.length===0){
+      list.innerHTML = '<div class="studylog-empty">No sessions logged yet. Log your first hours below.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    state.sessionHistory.slice(0,20).forEach(s=>{
+      const d = new Date(s.ts);
+      const dateStr = d.toLocaleDateString(undefined,{month:'short', day:'numeric'}) + ' · ' + d.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'});
+      const row = document.createElement('div');
+      row.className = 'log-row';
+      row.innerHTML = `
+        <div class="ld-date">${dateStr}</div>
+        <div class="ld-hours mono">${fmtHours(s.hours)}h</div>
+        <div class="ld-note ${s.note ? '' : 'empty'}">${s.note ? escapeHtml(s.note) : 'No notes added'}</div>
+      `;
+      list.appendChild(row);
+    });
+  }
+
+  async function renderRoom(){
+    if(!state.groupCode) return;
+    const group = await fetchGroup();
+    const roster = document.getElementById('roster');
+    const resList = document.getElementById('resourcesList');
+
+    if(!group || !group.members){
+      roster.innerHTML = '<div class="empty-mini">No members yet.</div>';
+      resList.innerHTML = '<div class="empty-mini">No resources shared yet.</div>';
+      return;
+    }
+
+    const members = Object.entries(group.members).map(([id,m])=>({id,...m}));
+    members.sort((a,b)=>b.totalHours-a.totalHours);
+    roster.innerHTML = '';
+    members.forEach((m, i)=>{
+      const row = document.createElement('div');
+      row.className = 'roster-row' + (m.id===state.id ? ' me' : '');
+      const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
+      const pct = clamp((m.totalHours/GOAL_TOTAL)*100,0,100);
+      const minutesAgo = m.lastActive ? (Date.now()-m.lastActive)/60000 : 9999;
+      const statusClass = minutesAgo<5 ? 'live' : (m.todayHours>0 ? 'today' : 'idle');
+      const statusText = minutesAgo<5 ? 'Active now' : (m.todayHours>0 ? fmtHours(m.todayHours)+'h today' : 'Idle today');
+      row.innerHTML = `
+        <div class="rank ${rankClass}">${i+1}</div>
+        <div class="r-avatar">${initials(m.name)}<span class="status-dot ${statusClass}"></span></div>
+        <div class="r-info">
+          <div class="r-name">${escapeHtml(m.name)} ${m.id===state.id?'<span class="you-tag">YOU</span>':''}</div>
+          <div class="r-meta">${statusText} · Lv.${m.level||1} ${escapeHtml(m.title||'')}</div>
+          <div class="r-bar"><div class="r-bar-fill" style="width:${pct}%;"></div></div>
+        </div>
+        <div class="r-hours mono">${fmtHours(m.totalHours)}h</div>
+      `;
+      roster.appendChild(row);
+    });
+
+    const resources = group.resources || [];
+    if(resources.length===0){
+      resList.innerHTML = '<div class="empty-mini">No resources shared yet. Add a PDF or Drive link for the room.</div>';
+    } else {
+      resList.innerHTML = '';
+      resources.forEach(r=>{
+        const row = document.createElement('div');
+        row.className = 'resource-row';
+        const safeUrl = (r.url||'').startsWith('http') ? r.url : '#';
+        row.innerHTML = `
+          <div class="resource-icon">📄</div>
+          <div class="resource-info">
+            <a class="resource-title" href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(r.title||'Untitled link')}</a>
+            <div class="resource-meta">shared by ${escapeHtml(r.addedByName||'someone')} · ${timeAgo(r.ts)}</div>
+          </div>
+        `;
+        resList.appendChild(row);
+      });
+    }
+
+    // combined, time-sorted feed of every member's recent study sessions
+    const activityFeed = document.getElementById('roomActivityList');
+    const activity = [];
+    members.forEach(m=>{
+      (m.recentLog||[]).forEach(s=>activity.push({ id:m.id, name:m.name, ts:s.ts, hours:s.hours, note:s.note }));
+    });
+    activity.sort((a,b)=>b.ts-a.ts);
+    if(activity.length===0){
+      activityFeed.innerHTML = '<div class="empty-mini">No study sessions logged in this room yet.</div>';
+    } else {
+      activityFeed.innerHTML = '';
+      activity.slice(0,30).forEach(s=>{
+        const d = new Date(s.ts);
+        const dateStr = d.toLocaleDateString(undefined,{month:'short', day:'numeric'}) + ' · ' + d.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'});
+        const row = document.createElement('div');
+        row.className = 'log-row';
+        const whoLabel = escapeHtml(s.name) + (s.id===state.id ? ' (you)' : '');
+        row.innerHTML = `
+          <div class="ld-date">${dateStr}</div>
+          <div class="ld-hours mono">${fmtHours(s.hours)}h</div>
+          <div class="ld-note ${s.note ? '' : 'empty'}"><span class="who">${whoLabel}</span> — ${s.note ? escapeHtml(s.note) : 'No notes added'}</div>
+        `;
+        activityFeed.appendChild(row);
+      });
+    }
+  }
+
+  // ---------- core actions ----------
+  async function addStudyHours(hours, note){
+    hours = Math.round(hours*100)/100;
+    if(hours<=0) return;
+    const prevLevel = getLevelInfo(state.totalXP).level;
+    const prevMilestone = Math.floor(state.totalHours/500);
+
+    state.totalHours += hours;
+    state.totalXP += Math.round(hours*XP_PER_HOUR);
+    const today = localDateKey();
+    state.dailyLog[today] = (state.dailyLog[today]||0) + hours;
+    state.sessionHistory.unshift({ ts: Date.now(), hours, note: (note||'').trim() });
+    state.sessionHistory = state.sessionHistory.slice(0,50);
+
+    await saveProfile();
+    render();
+    await syncGroupSelf();
+    renderRoom();
+
+    const newLevel = getLevelInfo(state.totalXP).level;
+    const newMilestone = Math.floor(state.totalHours/500);
+    if(newLevel>prevLevel){
+      showToast('Level up → '+newLevel, getLevelInfo(state.totalXP).title);
+    } else if(newMilestone>prevMilestone){
+      showToast('Milestone reached', Math.round(newMilestone*500)+' hours logged');
+    } else {
+      showToast('Session logged', '+'+fmtHours(hours)+'h · +'+Math.round(hours*XP_PER_HOUR)+' XP');
+    }
+  }
+
+  // ---------- timer ----------
+  function fmtClock(ms){
+    const s = Math.floor(ms/1000);
+    const h = String(Math.floor(s/3600)).padStart(2,'0');
+    const m = String(Math.floor((s%3600)/60)).padStart(2,'0');
+    const sec = String(s%60).padStart(2,'0');
+    return h+':'+m+':'+sec;
+  }
+  function tickTimer(){
+    const elapsed = Date.now()-timer.startedAt;
+    document.getElementById('timerDisplay').textContent = fmtClock(elapsed);
+  }
+  function startTimer(){
+    timer.running = true; timer.startedAt = Date.now();
+    // update hero UI
+    const hero = document.getElementById('timerHero');
+    hero.classList.add('running');
+    document.getElementById('timerDisplay').classList.add('running');
+    document.getElementById('dockDot').classList.add('show');
+    document.getElementById('timerStatusLabel').textContent = 'LIVE';
+    document.getElementById('timerStatusLabel').classList.add('live');
+    document.getElementById('timerSub').textContent = 'Session in progress — stop when you\'re done';
+    const btn = document.getElementById('timerToggle');
+    btn.textContent = '⏹ Stop Session';
+    btn.className = 'timer-btn-stop';
+    btn.id = 'timerToggle';
+    timer.tickHandle = setInterval(tickTimer, 1000);
+  }
+  function stopTimerAndPromptLog(){
+    clearInterval(timer.tickHandle);
+    const elapsedMs = Date.now()-timer.startedAt;
+    timer.running = false;
+    // restore hero UI to idle
+    const hero = document.getElementById('timerHero');
+    hero.classList.remove('running');
+    document.getElementById('timerDisplay').classList.remove('running');
+    document.getElementById('timerDisplay').textContent = '00:00:00';
+    document.getElementById('dockDot').classList.remove('show');
+    document.getElementById('timerStatusLabel').textContent = 'READY';
+    document.getElementById('timerStatusLabel').classList.remove('live');
+    document.getElementById('timerSub').textContent = 'Start a session to begin tracking live time';
+    const btn = document.getElementById('timerToggle');
+    btn.textContent = '▶ Start Session';
+    btn.className = 'timer-btn-start';
+    btn.id = 'timerToggle';
+    const hrs = Math.round((elapsedMs/3600000)*100)/100;
+    if(hrs < (1/60)) return; // ignore accidental sub-second taps
+    pendingTimerHours = hrs;
+    // show modal with timed duration badge
+    document.getElementById('logModalTitle').textContent = 'Save your session';
+    document.getElementById('logModalDesc').textContent = 'Great work! Add a note about what you covered.';
+    document.getElementById('logTimeBadge').textContent = fmtClock(elapsedMs);
+    document.getElementById('logNoteInput').value = '';
+    openModal('logModal');
+  }
+
+  // ---------- modals ----------
+  function openModal(id){ document.getElementById(id).classList.add('show'); }
+  function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+
+  // ---------- backup ----------
+  function exportBackup(){
+    const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'studygrid-backup-'+localDateKey()+'.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('Backup exported', 'Save this file to your Google Drive to keep it safe');
+  }
+  function importBackup(file){
+    const reader = new FileReader();
+    reader.onload = async (e)=>{
+      try{
+        const data = JSON.parse(e.target.result);
+        if(typeof data.totalHours !== 'number') throw new Error('invalid file');
+        state = Object.assign(state, data);
+        await saveProfile();
+        showToast('Backup restored', 'Your data has been imported');
+        render();
+        if(state.groupCode){ await syncGroupSelf(); startGroupPolling(); }
+      }catch(err){
+        alert('That file doesn\'t look like a valid STUDYGRID backup.');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // ---------- wiring ----------
+  function wireEvents(){
+    document.getElementById('settingsBtn').onclick = ()=>{
+      document.getElementById('settingsName').value = state.name;
+      document.getElementById('settingsGoal').value = state.dailyGoalHours;
+      openModal('settingsModal');
+    };
+    document.getElementById('settingsCancel').onclick = ()=>closeModal('settingsModal');
+    document.getElementById('settingsSave').onclick = async ()=>{
+      const name = document.getElementById('settingsName').value.trim();
+      const goal = parseFloat(document.getElementById('settingsGoal').value);
+      if(name) state.name = name;
+      if(goal>0) state.dailyGoalHours = goal;
+      await saveProfile();
+      render();
+      if(state.groupCode) syncGroupSelf();
+      closeModal('settingsModal');
+    };
+    document.getElementById('exportBtn').onclick = exportBackup;
+    document.getElementById('importBtn').onclick = ()=> document.getElementById('importFile').click();
+    document.getElementById('importFile').onchange = (e)=>{
+      if(e.target.files && e.target.files[0]) importBackup(e.target.files[0]);
+      e.target.value = '';
+    };
+    document.getElementById('resetDataBtn').onclick = async ()=>{
+      if(!confirm('This clears all your local progress (hours, XP, notes, room membership). Continue?')) return;
+      try{ await window.storage.delete(STORAGE_KEY, false); }catch(e){}
+      location.reload();
+    };
+
+    document.getElementById('logCancel').onclick = ()=>{ pendingTimerHours=null; closeModal('logModal'); };
+    document.getElementById('logSubmit').onclick = async ()=>{
+      const hrs = pendingTimerHours;
+      const note = document.getElementById('logNoteInput').value;
+      if(!hrs || hrs<=0) return;
+      closeModal('logModal');
+      pendingTimerHours = null;
+      await addStudyHours(hrs, note);
+    };
+
+    document.getElementById('timerToggle').onclick = ()=>{
+      if(timer.running) stopTimerAndPromptLog();
+      else startTimer();
+    };
+
+    document.getElementById('openGroupModalBtn').onclick = ()=>openModal('groupModal');
+    document.getElementById('groupCancel').onclick = ()=>closeModal('groupModal');
+    document.getElementById('leaveGroupBtn').onclick = async ()=>{
+      if(!confirm('Leave this room? Your friends will no longer see your progress.')) return;
+      state.groupCode = null; state.groupName = null;
+      await saveProfile();
+      stopGroupPolling();
+      render();
+    };
+
+    document.querySelectorAll('#groupModal .tab').forEach(tab=>{
+      tab.onclick = ()=>{
+        document.querySelectorAll('#groupModal .tab').forEach(t=>t.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('joinPane').style.display = tab.dataset.tab==='join' ? 'block':'none';
+        document.getElementById('createPane').style.display = tab.dataset.tab==='create' ? 'block':'none';
+      };
+    });
+
+    document.getElementById('groupSubmit').onclick = async ()=>{
+      const activeTab = document.querySelector('#groupModal .tab.active').dataset.tab;
+      if(activeTab==='join'){
+        const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
+        if(!code) return;
+        state.groupCode = code;
+        state.groupName = null;
+        await saveProfile();
+        await syncGroupSelf();
+        const g = await fetchGroup();
+        if(g && g.name) { state.groupName = g.name; await saveProfile(); }
+      } else {
+        const name = document.getElementById('createNameInput').value.trim() || 'My Room';
+        const code = uid(4);
+        state.groupCode = code;
+        state.groupName = name;
+        await saveProfile();
+        await syncGroupSelf();
+        showToast('Room created', 'Share code '+code+' with friends');
+      }
+      closeModal('groupModal');
+      render();
+      startGroupPolling();
+    };
+
+    document.getElementById('addResourceBtn').onclick = ()=>{
+      document.getElementById('resourceTitleInput').value = '';
+      document.getElementById('resourceUrlInput').value = '';
+      openModal('resourceModal');
+    };
+    document.getElementById('resourceCancel').onclick = ()=>closeModal('resourceModal');
+    document.getElementById('resourceSubmit').onclick = async ()=>{
+      const title = document.getElementById('resourceTitleInput').value.trim();
+      const url = document.getElementById('resourceUrlInput').value.trim();
+      if(!title || !url || !/^https?:\/\//i.test(url)){
+        alert('Add a title and a valid link starting with http:// or https://');
+        return;
+      }
+      closeModal('resourceModal');
+      await addResourceToGroup(title, url);
+      showToast('Resource shared', 'Your room can now see this link');
+      renderRoom();
+    };
+  }
+
+  function startGroupPolling(){
+    stopGroupPolling();
+    if(!state.groupCode) return;
+    renderRoom();
+    groupPollHandle = setInterval(renderRoom, 15000);
+    if(window.subscribeGroupRealtime) window.subscribeGroupRealtime(state.groupCode, renderRoom);
+  }
+  function stopGroupPolling(){
+    if(groupPollHandle) clearInterval(groupPollHandle);
+    groupPollHandle = null;
+    if(window.unsubscribeGroupRealtime) window.unsubscribeGroupRealtime();
+  }
+
+  // ---------- onboarding ----------
+  async function maybeOnboard(){
+    if(state.id && state.name){
+      render();
+      if(state.groupCode) startGroupPolling();
+      return;
+    }
+    openModal('onboardModal');
+    document.getElementById('onboardSubmit').onclick = async ()=>{
+      const name = document.getElementById('onboardName').value.trim();
+      const goal = parseFloat(document.getElementById('onboardGoal').value) || 4;
+      if(!name) return;
+      state.id = uid(8);
+      state.name = name;
+      state.dailyGoalHours = goal;
+      await saveProfile();
+      closeModal('onboardModal');
+      render();
+    };
+  }
+
+  // ---------- boot ----------
+  async function boot(){
+    wireEvents();
+    await loadProfile();
+    await maybeOnboard();
+    setInterval(renderCountdown, 1000);
+    setInterval(render, 60000);
+  }
+  boot();
+})();
+</script>
+</body>
+</html>
