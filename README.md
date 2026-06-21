@@ -8,7 +8,7 @@ Welcome to my very first repository! This project exists purely for the sake of 
 
 Let's clear the air right now: **I am not a professional.** If you look at this code and expect standard production-grade architecture, you are in the wrong neighborhood. 
 
-This repository is a monument to pure, unadulterated human determination. The entire codebase was fabricated by my own sole creativity and raw intellect... right up until Claude intercepted my thoughts, judged my syntax, and rewrote the entire thing. *(Yes, this is satire. Or is it? Please don't check the commit history).*
+This repository is a monument to pure, unadulterated human determination. The entire codebase was fabricated by my own sole creativity and raw intellect... right up until Claude intercepted my thoughts, judged my syntax, and rewrote the entire thing. *(Yes,is it? Please don't check the commit history).*
 
 ### Key Features
 * **100% Organic Logic:** Crafted from scratch, line by line.
