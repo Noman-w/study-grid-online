@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>STUDYGRID</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght=500;600;700&family=JetBrains+Mono:wght=400;500;600;700&family=Inter:wght=400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root{
@@ -81,7 +81,7 @@
   .hero-readout .big{font-family:'JetBrains Mono',monospace;font-size:clamp(28px,5vw,40px);font-weight:700;letter-spacing:-1px;}
   .hero-readout .of{font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--muted);}
   .hero-stats{display:flex;gap:22px;flex-wrap:wrap;}
-  .hero-stat{text-align:right;}
+  .hero-stats .hero-stat{text-align:right;}
   .hero-stat .v{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;color:var(--text);}
   .hero-stat .l{font-size:10px;color:var(--muted-dim);text-transform:uppercase;letter-spacing:1px;}
   .trace-wrap{position:relative;padding-top:4px;}
@@ -778,6 +778,33 @@
     let c=0,n=500; for(let i=1;i<lv;i++){ c+=n; n+=250; } return c;
   }
 
+  /* Synthetic electronic ping chime for incoming notifications */
+  function playNotificationSound() {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5 tone
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1); // Sweet sweep up to A5
+      
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } catch (e) {
+      console.warn('Audio synthesis deferred:', e);
+    }
+  }
+
   /* ══════════════════════════════════════════════════════════════════════════
      TIMESTAMP-BASED TIMER  –  CORE FUNCTIONS
      ══════════════════════════════════════════════════════════════════════════ */
@@ -962,7 +989,7 @@
     } else if(isPaused){
       label.textContent = 'PAUSED';
       label.className   = 'paused-lbl';
-      sub.textContent   = 'Session paused · '+timerRecord.topic+' · Click Resume to continue';
+      sub.textContent = 'Session paused · '+timerRecord.topic+' · Click Resume to continue';
       display.textContent = fmtClock(getElapsedMs());
       field.style.display = 'none';
       banner.style.display= 'none';
@@ -1003,8 +1030,7 @@
     setTimeout(()=>{ banner.style.display='none'; }, 7000);
   }
 
-  /* ══════════════════════════════════════════════════════════════════════════
-     HEARTBEAT  –  drives online/offline dots in the room roster
+  /* ── HEARTBEAT  –  drives online/offline dots in the room roster
      Pushes `lastActive` every 8 s independently of the timer. When the tab
      closes the heartbeats stop → member goes offline after 60 s.
      ══════════════════════════════════════════════════════════════════════════ */
@@ -1319,11 +1345,27 @@
     const shouldScroll = forceChatScroll || nearBottom;
     forceChatScroll = false;
 
+    // Smart UI Check: Is the user looking at a completely different system component/tab?
+    const roomTabActive = document.querySelector('.nav-item[data-target="roomSection"]')?.classList.contains('active');
+    const userIsAway = document.hidden || !roomTabActive;
+
     // New-message notifications — only AFTER the first full render
     if(chatInitialized){
       messages.forEach(msg=>{
         if((msg.ts||0) > lastSeenMessageTs && msg.sender !== state.name){
+          // Maintain default fallback toast
           showToast('New Message 💬', msg.sender+': '+msg.text);
+
+          // Premium Desktop Notification Implementation
+          if(userIsAway){
+            playNotificationSound();
+            if('Notification' in window && Notification.permission === 'granted'){
+              new Notification(`New Message from ${msg.sender}`, {
+                body: msg.text,
+                tag: 'studygrid-chat' // Deduplicates window stack groupings
+              });
+            }
+          }
         }
       });
     }
@@ -1674,6 +1716,11 @@
     wireEvents();
     await loadProfile();
     await maybeOnboard();
+
+    // Verify Notification Engine Permissions on App Bootup
+    if('Notification' in window && Notification.permission === 'default'){
+      Notification.requestPermission();
+    }
 
     // ── Restore any timer that was running/paused before page closed ──────
     const hadTimer = await loadPersistedTimer();
