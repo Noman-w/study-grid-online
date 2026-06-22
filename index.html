@@ -73,7 +73,7 @@
 
   /* hero */
   .hero{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:28px 28px 24px;overflow:hidden;margin-bottom:18px;}
-  .hero::before{content:'public';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--teal-glow),transparent);}
+  .hero::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--teal-glow),transparent);}
   .hero-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-bottom:18px;}
   .eyebrow{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);font-weight:600;display:flex;align-items:center;gap:6px;}
   .eyebrow::before{content:'';width:6px;height:6px;background:var(--teal);border-radius:50%;box-shadow:0 0 6px var(--teal-glow);}
@@ -432,7 +432,7 @@
           <div class="room-pane-title">Room Live Chat</div>
           <div id="chatMessages" style="flex:1;overflow-y:auto;font-size:12px;margin-bottom:8px;display:flex;flex-direction:column;gap:4px;padding-right:4px;"></div>
           <div style="display:flex;gap:6px;">
-            <input type="text" id="chatInput" placeholder="Type a message..." style="padding:6px 10px;height:30px;">
+            <input type="text" id="chatInput" maxlength="500" placeholder="Type a message..." style="padding:6px 10px;height:30px;">
             <button class="btn btn-primary btn-sm" id="sendChatBtn" style="padding:4px 10px;height:30px;">Send</button>
           </div>
         </div>
@@ -713,7 +713,6 @@
   let timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
 
   let tickHandle      = null; // 1-second DOM refresh – does NOT drive elapsed
-  let heartbeatHandle = null; // pushes lastActive to room every 60 s
   let cachedGroupData = null;
   let pendingTimerHours = null;
 
@@ -1011,19 +1010,14 @@
     setTimeout(()=>{ banner.style.display='none'; }, 7000);
   }
 
-  /* ── HEARTBEAT  –  drives online/offline dots in the room roster
-     Pushes `lastActive` every 60 s independently of the timer. When the tab
-     closes the heartbeats stop → member goes offline after 90 s.
+  /* ── PRESENCE (NO BACKGROUND HEARTBEAT) ────────────────────────────────────
+     There is intentionally no interval/timer that pings Supabase. `lastActive`
+     is only ever written by syncGroupSelf(), which itself is only called from
+     real user actions (start/pause/resume/stop timer, send chat, share a
+     resource, save settings, log a session). That single write is what
+     drives `lastActive` in the roster — nothing polls or re-checks on a
+     schedule. This is the only thing keeping egress bounded on the Free Plan.
      ══════════════════════════════════════════════════════════════════════════ */
-  function startHeartbeat(){
-    //stopHeartbeat();
-    //if(!state.groupCode) return;
-    //syncGroupSelf();                            // immediate push
-    //heartbeatHandle = setInterval(syncGroupSelf, 60000);
-  }
-  function stopHeartbeat(){
-    if(heartbeatHandle){ clearInterval(heartbeatHandle); heartbeatHandle=null; }
-  }
 
   /* ── STORAGE ────────────────────────────────────────────────────────────── */
   async function loadProfile(){
@@ -1044,7 +1038,7 @@
 
   /* ── GROUP SYNC ─────────────────────────────────────────────────────────── */
   async function syncGroupSelf(){
-    if(!state.groupCode) return;
+    if(!state.groupCode) return null;
     const key = 'group:'+state.groupCode;
     try{
       let cur = { name:state.groupName||state.groupCode, members:{}, resources:[], messages:[] };
@@ -1065,7 +1059,7 @@
         title         : lvl.title,
         todayHours    : state.dailyLog[today]||0,
         dailyGoalHours: state.dailyGoalHours,
-        lastActive    : Date.now(),   // ← heartbeat timestamp for online/offline
+        lastActive    : Date.now(),   // ← set only here, only on a real user action
         // full timerRecord so friends can extrapolate the clock from started_at
         timerRecord   : { ...timerRecord },
         recentLog     : (state.sessionHistory||[]).filter(s=>!s.isLive).slice(0,5)
@@ -1073,7 +1067,8 @@
       };
       if(state.groupName) cur.name = state.groupName;
       await window.storage.set(key, JSON.stringify(cur), true);
-    }catch(e){ console.error('group sync failed', e); }
+      return cur; // ← let callers reuse this instead of re-fetching the whole blob
+    }catch(e){ console.error('group sync failed', e); return null; }
   }
 
   async function fetchGroup(){
@@ -1086,7 +1081,7 @@
   }
 
   async function addResourceToGroup(title, url){
-    if(!state.groupCode) return;
+    if(!state.groupCode) return null;
     const key = 'group:'+state.groupCode;
     try{
       let cur = { name:state.groupName||state.groupCode, members:{}, resources:[], messages:[] };
@@ -1095,12 +1090,15 @@
       cur.resources.unshift({ id:uid(6), title, url, addedBy:state.id, addedByName:state.name, ts:Date.now() });
       cur.resources = cur.resources.slice(0,30);
       await window.storage.set(key, JSON.stringify(cur), true);
-    }catch(e){ console.error('resource share failed', e); }
+      return cur; // ← reuse instead of re-fetching
+    }catch(e){ console.error('resource share failed', e); return null; }
   }
+
+  const CHAT_MAX_LEN = 500; // hard cap so pasted text can't balloon the room blob / egress
 
   async function sendChatMessage(){
     const input = document.getElementById('chatInput');
-    const text  = input.value.trim();
+    const text  = input.value.trim().slice(0, CHAT_MAX_LEN);
     if(!text || !state.groupCode) return;
     input.value = '';
     const key = 'group:'+state.groupCode;
@@ -1113,7 +1111,7 @@
       if(cur.messages.length>50) cur.messages.shift();
       await window.storage.set(key, JSON.stringify(cur), true);
       forceChatScroll = true;   // user just sent — always jump to bottom
-      renderRoom();
+      renderRoom(cur);          // ← reuse the data we already have, no extra GET
     }catch(e){ console.error('chat failed', e); }
   }
 
@@ -1437,8 +1435,8 @@
 
     await saveProfile();
     render();
-    await syncGroupSelf();
-    renderRoom();
+    const g = await syncGroupSelf();
+    renderRoom(g); // ← reuse the data syncGroupSelf already wrote/has, no extra GET
 
     const newLevel     = getLevelInfo(state.totalXP).level;
     const newMilestone = Math.floor(state.totalHours/500);
@@ -1508,17 +1506,15 @@
     });
   }
 
-  /* ── GROUP POLLING ──────────────────────────────────────────────────────── */
+  /* ── GROUP REALTIME (no polling — one fetch + one live subscription) ─────── */
   function startGroupPolling(){
     stopGroupPolling();
     if(!state.groupCode) return;
     renderRoom();
     if(window.subscribeGroupRealtime) window.subscribeGroupRealtime(state.groupCode, renderRoom);
-    startHeartbeat();
   }
   function stopGroupPolling(){
     if(window.unsubscribeGroupRealtime) window.unsubscribeGroupRealtime();
-    stopHeartbeat();
   }
 
   /* ── WIRE EVENTS ────────────────────────────────────────────────────────── */
@@ -1638,8 +1634,8 @@
         const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
         if(!code) return;
         state.groupCode=code; state.groupName=null;
-        await saveProfile(); await syncGroupSelf();
-        const g = await fetchGroup();
+        await saveProfile();
+        const g = await syncGroupSelf();
         if(g&&g.name){ state.groupName=g.name; await saveProfile(); }
       } else {
         const name = document.getElementById('createNameInput').value.trim()||'My Room';
@@ -1658,9 +1654,9 @@
       const url   = document.getElementById('resourceUrlInput').value.trim();
       if(!title||!url||!/^https?:\/\//i.test(url)){ alert('Enter a valid URL starting with http:// or https://'); return; }
       closeModal('resourceModal');
-      await addResourceToGroup(title, url);
+      const g = await addResourceToGroup(title, url);
       showToast('Resource shared','Link added to the room');
-      renderRoom();
+      renderRoom(g); // ← reuse, no extra GET
     };
   }
 
