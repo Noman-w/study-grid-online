@@ -6,411 +6,252 @@
 <title>STUDYGRID</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<!-- Supabase client -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root{
-    --bg:#0a0d10;
-    --panel:#11161c;
-    --panel-2:#161e26;
-    --line:#222b34;
-    --line-soft:#1a222a;
-    --text:#e7ecf1;
-    --muted:#7c8a97;
-    --muted-dim:#4d5a66;
-    --teal:#4fe3c1;
-    --teal-glow:rgba(79,227,193,.35);
-    --amber:#f2a93b;
-    --amber-glow:rgba(242,169,59,.35);
-    --violet:#9b8cff;
-    --violet-glow:rgba(155,140,255,.35);
-    --danger:#ff6b6b;
-    --radius:10px;
-    --radius-sm:6px;
+    --bg:#0a0d10; --panel:#11161c; --panel-2:#161e26; --line:#222b34; --line-soft:#1a222a;
+    --text:#e7ecf1; --muted:#7c8a97; --muted-dim:#4d5a66;
+    --teal:#4fe3c1; --teal-glow:rgba(79,227,193,.35);
+    --amber:#f2a93b; --amber-glow:rgba(242,169,59,.35);
+    --violet:#9b8cff; --violet-glow:rgba(155,140,255,.35);
+    --danger:#ff6b6b; --radius:10px; --radius-sm:6px;
   }
-  *{box-sizing:border-box; margin:0; padding:0;}
-  html,body{background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
   body{
-    background-image:
-      linear-gradient(var(--line-soft) 1px, transparent 1px),
-      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
-    background-size:32px 32px;
-    background-position:center top;
-    min-height:100vh;
+    background-image:linear-gradient(var(--line-soft) 1px,transparent 1px),linear-gradient(90deg,var(--line-soft) 1px,transparent 1px);
+    background-size:32px 32px;background-position:center top;min-height:100vh;
   }
-  .mono{ font-family:'JetBrains Mono',monospace; font-feature-settings:"tnum"; }
-  .display{ font-family:'Space Grotesk',sans-serif; }
-  .app{ max-width:1180px; margin:0 auto; padding:20px 20px 100px; }
+  .mono{font-family:'JetBrains Mono',monospace;font-feature-settings:"tnum";}
+  .display{font-family:'Space Grotesk',sans-serif;}
+  .app{max-width:1180px;margin:0 auto;padding:20px 20px 100px;}
 
-  /* ---------- app shell / sidebar ---------- */
-  .layout{ display:flex; min-height:100vh; align-items:stretch; }
-  .sidebar{
-    width:236px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--line);
-    display:flex; flex-direction:column; gap:18px; padding:22px 14px;
-    position:sticky; top:0; height:100vh; z-index:60; overflow-y:auto;
-  }
-  .sidebar-brand{ display:flex; align-items:center; gap:10px; padding:0 8px 16px; border-bottom:1px solid var(--line-soft); }
-  .brand-mark{ width:30px; height:30px; border:1.5px solid var(--teal); border-radius:6px; display:flex; align-items:center; justify-content:center; position:relative; flex-shrink:0;}
-  .brand-mark::before{ content:''; width:8px; height:8px; background:var(--teal); border-radius:1px; box-shadow:0 0 8px var(--teal-glow);}
-  .brand-text{ display:flex; flex-direction:column; line-height:1.1; }
-  .brand-text .name{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:16px; letter-spacing:.5px; }
-  .brand-text .tag{ font-size:9.5px; color:var(--muted-dim); letter-spacing:1.3px; text-transform:uppercase; }
+  /* topbar */
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:6px 4px 22px;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand-mark{width:30px;height:30px;border:1.5px solid var(--teal);border-radius:6px;display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;}
+  .brand-mark::before{content:'';width:8px;height:8px;background:var(--teal);border-radius:1px;box-shadow:0 0 8px var(--teal-glow);}
+  .brand-text{display:flex;flex-direction:column;line-height:1.1;}
+  .brand-text .name{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16px;letter-spacing:.5px;}
+  .brand-text .tag{font-size:10px;color:var(--muted-dim);letter-spacing:1.5px;text-transform:uppercase;}
+  .top-right{display:flex;align-items:center;gap:10px;}
+  .profile-pill{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px 6px 6px;cursor:default;}
+  .profile-pill .avatar{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--violet),var(--teal));display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#0a0d10;}
+  .profile-pill .pname{font-size:13px;font-weight:600;}
+  .profile-pill .plevel{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;}
+  .icon-btn{width:34px;height:34px;border-radius:var(--radius-sm);border:1px solid var(--line);background:var(--panel);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s;}
+  .icon-btn:hover{color:var(--text);border-color:var(--muted-dim);}
 
-  .sidebar-nav{ display:flex; flex-direction:column; gap:3px; }
-  .nav-item{
-    display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:var(--radius-sm);
-    color:var(--muted); text-decoration:none; font-size:13px; font-weight:600; cursor:pointer;
-    border:1px solid transparent; transition:.15s; font-family:'Inter',sans-serif; background:transparent; width:100%; text-align:left;
-  }
-  .nav-item:hover{ background:var(--panel-2); color:var(--text); }
-  .nav-item.active{ background:var(--panel-2); color:var(--teal); border-color:var(--line); }
-  .nav-ic{ font-size:13px; width:16px; text-align:center; flex-shrink:0; }
-  .sidebar-divider{ height:1px; background:var(--line-soft); margin:2px 4px; }
-  .sidebar-section-label{ font-size:9.5px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted-dim); padding:0 10px; margin-bottom:2px; }
+  /* hero */
+  .hero{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:28px 28px 24px;overflow:hidden;margin-bottom:18px;}
+  .hero::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--teal-glow),transparent);}
+  .hero-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-bottom:18px;}
+  .eyebrow{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);font-weight:600;display:flex;align-items:center;gap:6px;}
+  .eyebrow::before{content:'';width:6px;height:6px;background:var(--teal);border-radius:50%;box-shadow:0 0 6px var(--teal-glow);}
+  .hero-readout{display:flex;align-items:baseline;gap:10px;margin-top:6px;flex-wrap:wrap;}
+  .hero-readout .big{font-family:'JetBrains Mono',monospace;font-size:clamp(28px,5vw,40px);font-weight:700;letter-spacing:-1px;}
+  .hero-readout .of{font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--muted);}
+  .hero-stats{display:flex;gap:22px;flex-wrap:wrap;}
+  .hero-stat{text-align:right;}
+  .hero-stat .v{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;color:var(--text);}
+  .hero-stat .l{font-size:10px;color:var(--muted-dim);text-transform:uppercase;letter-spacing:1px;}
+  .trace-wrap{position:relative;padding-top:4px;}
+  .trace{position:relative;height:16px;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;overflow:hidden;}
+  .trace.sm{height:6px;}
+  .trace-fill{position:absolute;top:0;left:0;bottom:0;width:0%;background:linear-gradient(90deg,transparent,var(--c));transition:width .8s cubic-bezier(.2,.8,.2,1);}
+  .trace-fill .edge{position:absolute;right:-1px;top:-4px;bottom:-4px;width:3px;background:var(--c);box-shadow:0 0 10px 2px var(--c-glow);}
+  .trace.sm .trace-fill .edge{top:-2px;bottom:-2px;width:2px;}
+  .ticks{position:relative;height:18px;margin-top:4px;}
+  .tick{position:absolute;top:0;width:1px;height:6px;background:var(--line);}
+  .tick.major{height:9px;background:var(--muted-dim);}
+  .tick-label{position:absolute;top:8px;transform:translateX(-50%);font-size:9px;font-family:'JetBrains Mono',monospace;color:var(--muted-dim);}
 
-  .sidebar-spacer{ flex:1; }
-  .profile-pill{ display:flex; align-items:center; gap:8px; background:var(--panel-2); border:1px solid var(--line); border-radius:999px; padding:6px 12px 6px 6px; cursor:default;}
-  .profile-pill .avatar{ width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,var(--violet),var(--teal)); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#0a0d10; flex-shrink:0;}
-  .profile-pill .pname{ font-size:12.5px; font-weight:600; line-height:1.3; }
-  .profile-pill .plevel{ font-size:10px; color:var(--muted); font-family:'JetBrains Mono',monospace;}
-  .icon-btn{ width:34px; height:34px; border-radius:var(--radius-sm); border:1px solid var(--line); background:var(--panel); color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:.15s; }
-  .icon-btn:hover{ color:var(--text); border-color:var(--muted-dim); }
-
-  .main{ flex:1; min-width:0; }
-  .sidebar-toggle{
-    display:none; position:fixed; top:14px; left:14px; z-index:70; width:38px; height:38px;
-    border-radius:var(--radius-sm); border:1px solid var(--line); background:var(--panel); color:var(--text);
-    font-size:16px; align-items:center; justify-content:center; cursor:pointer;
-  }
-  .sidebar-overlay{ display:none; position:fixed; inset:0; background:rgba(5,7,9,.6); z-index:55; }
-
-  @media (max-width:880px){
-    .sidebar{ position:fixed; left:0; top:0; transform:translateX(-100%); transition:transform .25s ease; box-shadow:20px 0 50px rgba(0,0,0,.5); }
-    .sidebar.open{ transform:translateX(0); }
-    .sidebar-toggle{ display:flex; }
-    .sidebar-overlay.show{ display:block; }
-    .main{ padding-top:50px; }
-  }
-
-  /* ---------- hero / global progress ---------- */
-  .hero{ position:relative; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:28px 28px 24px; overflow:hidden; margin-bottom:18px;}
-  .hero::before{
-    content:''; position:absolute; top:0; left:0; right:0; height:1px;
-    background:linear-gradient(90deg, transparent, var(--teal-glow), transparent);
-  }
-  .hero-top{ display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px; margin-bottom:18px;}
-  .eyebrow{ font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--teal); font-weight:600; display:flex; align-items:center; gap:6px;}
-  .eyebrow::before{ content:''; width:6px; height:6px; background:var(--teal); border-radius:50%; box-shadow:0 0 6px var(--teal-glow); }
-  .hero-readout{ display:flex; align-items:baseline; gap:10px; margin-top:6px; flex-wrap:wrap;}
-  .hero-readout .big{ font-family:'JetBrains Mono',monospace; font-size:40px; font-weight:700; letter-spacing:-1px; }
-  .hero-readout .of{ font-family:'JetBrains Mono',monospace; font-size:18px; color:var(--muted); }
-  .hero-stats{ display:flex; gap:22px; flex-wrap:wrap; }
-  .hero-stat{ text-align:right; }
-  .hero-stat .v{ font-family:'JetBrains Mono',monospace; font-size:18px; font-weight:600; color:var(--text); }
-  .hero-stat .l{ font-size:10px; color:var(--muted-dim); text-transform:uppercase; letter-spacing:1px; }
-
-  .trace-wrap{ position:relative; padding-top:4px; }
-  .trace{ position:relative; height:16px; background:var(--panel-2); border:1px solid var(--line); border-radius:4px; overflow:hidden; }
-  .trace.sm{ height:6px; }
-  .trace-fill{ position:absolute; top:0; left:0; bottom:0; width:0%; background:linear-gradient(90deg, transparent, var(--c)); transition:width .8s cubic-bezier(.2,.8,.2,1); }
-  .trace-fill .edge{ position:absolute; right:-1px; top:-4px; bottom:-4px; width:3px; background:var(--c); box-shadow:0 0 10px 2px var(--c-glow); }
-  .trace.sm .trace-fill .edge{ top:-2px; bottom:-2px; width:2px; }
-  .ticks{ position:relative; height:18px; margin-top:4px; }
-  .tick{ position:absolute; top:0; width:1px; height:6px; background:var(--line); }
-  .tick.major{ height:9px; background:var(--muted-dim); }
-  .tick-label{ position:absolute; top:8px; transform:translateX(-50%); font-size:9px; font-family:'JetBrains Mono',monospace; color:var(--muted-dim); }
-
-  /* ---------- grid main ---------- */
-  .grid-main{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
-  @media (max-width:760px){ .grid-main{ grid-template-columns:1fr; } }
-
-  .card{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:20px; display:flex; flex-direction:column; }
-  .card-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:10px; }
-  .card-title{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; letter-spacing:.3px; }
-  .card-sub{ font-size:10px; color:var(--muted-dim); letter-spacing:1px; text-transform:uppercase; margin-top:1px; }
+  /* grid */
+  .grid-main{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+  @media(max-width:760px){.grid-main{grid-template-columns:1fr;}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;}
+  .card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;}
+  .card-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;letter-spacing:.3px;}
+  .card-sub{font-size:10px;color:var(--muted-dim);letter-spacing:1px;text-transform:uppercase;margin-top:1px;}
 
   /* daily */
-  .daily-readout{ font-family:'JetBrains Mono',monospace; font-size:26px; font-weight:700; margin-bottom:2px; }
-  .daily-of{ font-size:12px; color:var(--muted); font-family:'JetBrains Mono',monospace; margin-bottom:12px; }
-  .reset-countdown{ margin-top:14px; font-size:11px; color:var(--muted-dim); display:flex; justify-content:space-between; align-items:center; }
-  .reset-countdown .t{ font-family:'JetBrains Mono',monospace; color:var(--amber); font-weight:600; }
-  .goal-met{ display:none; align-items:center; gap:6px; font-size:11px; color:var(--teal); font-weight:600; margin-top:14px; letter-spacing:.5px; }
-  .goal-met.show{ display:flex; }
+  .daily-readout{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;margin-bottom:2px;}
+  .daily-of{font-size:12px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-bottom:12px;}
+  .reset-countdown{margin-top:14px;font-size:11px;color:var(--muted-dim);display:flex;justify-content:space-between;align-items:center;}
+  .reset-countdown .t{font-family:'JetBrains Mono',monospace;color:var(--amber);font-weight:600;}
+  .goal-met{display:none;align-items:center;gap:6px;font-size:11px;color:var(--teal);font-weight:600;margin-top:14px;letter-spacing:.5px;}
+  .goal-met.show{display:flex;}
 
   /* level */
-  .level-top{ display:flex; align-items:center; gap:14px; margin-bottom:14px; }
-  .level-ring{ width:54px; height:54px; border-radius:50%; border:3px solid var(--line); display:flex; align-items:center; justify-content:center; position:relative; flex-shrink:0;}
-  .level-ring .num{ font-family:'JetBrains Mono',monospace; font-weight:700; font-size:18px; }
-  .level-ring::before{ content:''; position:absolute; inset:-3px; border-radius:50%; border:3px solid var(--violet); border-right-color:transparent; border-bottom-color:transparent; transform:rotate(45deg);}
-  .level-title{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:15px; }
-  .level-xp{ font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace; margin-top:2px;}
-  .xp-to-next{ font-size:10px; color:var(--muted-dim); text-align:right; margin-top:6px; }
+  .level-top{display:flex;align-items:center;gap:14px;margin-bottom:14px;}
+  .level-ring{width:54px;height:54px;border-radius:50%;border:3px solid var(--line);display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;}
+  .level-ring .num{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:18px;}
+  .level-ring::before{content:'';position:absolute;inset:-3px;border-radius:50%;border:3px solid var(--violet);border-right-color:transparent;border-bottom-color:transparent;transform:rotate(45deg);}
+  .level-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;}
+  .level-xp{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:2px;}
+  .xp-to-next{font-size:10px;color:var(--muted-dim);text-align:right;margin-top:6px;}
 
   /* room */
-  .room-card{ margin-bottom:16px; }
-  .room-empty{ display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:10px; padding:30px 0; }
-  .room-empty p{ font-size:12px; color:var(--muted); max-width:280px; line-height:1.5; }
-  .group-code-display{ font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--teal); background:var(--panel-2); border:1px solid var(--line); padding:4px 10px; border-radius:999px; letter-spacing:1px; }
-  .room-grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
-  @media (max-width:760px){ .room-grid{ grid-template-columns:1fr; } }
-  .room-pane-title{ font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--muted-dim); margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; }
-  .roster{ display:flex; flex-direction:column; gap:10px; overflow-y:auto; max-height:320px; padding-right:2px;}
-  .roster-row{ display:flex; align-items:center; gap:10px; padding:9px; border-radius:var(--radius-sm); border:1px solid transparent; }
-  .roster-row.me{ border-color:var(--line); background:var(--panel-2); }
-  .rank{ width:18px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted-dim); text-align:center; flex-shrink:0;}
-  .rank.r1{ color:#ffd56b; } .rank.r2{ color:#c9d3dc; } .rank.r3{ color:#e0995f; }
-  .r-avatar{ width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,var(--violet),var(--teal)); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:#0a0d10; flex-shrink:0; position:relative;}
-  .status-dot{ position:absolute; bottom:-2px; right:-2px; width:8px; height:8px; border-radius:50%; border:2px solid var(--panel); }
-  .status-dot.live{ background:var(--teal); }
-  .status-dot.idle{ background:var(--muted-dim); }
-  .r-info{ flex:1; min-width:0; }
-  .r-name{ font-size:12px; font-weight:600; display:flex; align-items:center; gap:6px; }
-  .r-name .you-tag{ font-size:8px; color:var(--teal); border:1px solid var(--teal); border-radius:3px; padding:1px 4px; letter-spacing:.5px; }
-  .r-meta{ font-size:10px; color:var(--muted-dim); margin-top:2px; }
-  .r-bar{ height:4px; background:var(--panel-2); border-radius:2px; margin-top:5px; overflow:hidden; }
-  .r-bar-fill{ height:100%; background:var(--teal); }
-  .r-hours{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); flex-shrink:0; width:74px; text-align:right;}
+  .room-card{margin-bottom:16px;}
+  .room-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;padding:30px 0;}
+  .room-empty p{font-size:12px;color:var(--muted);max-width:280px;line-height:1.5;}
+  .group-code-display{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--teal);background:var(--panel-2);border:1px solid var(--line);padding:4px 10px;border-radius:999px;letter-spacing:1px;}
+  .room-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  @media(max-width:760px){.room-grid{grid-template-columns:1fr;}}
+  .room-pane-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted-dim);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
+  .roster{display:flex;flex-direction:column;gap:10px;overflow-y:auto;max-height:320px;padding-right:2px;}
+  .roster-row{display:flex;align-items:center;gap:10px;padding:9px;border-radius:var(--radius-sm);border:1px solid transparent;}
+  .roster-row.me{border-color:var(--line);background:var(--panel-2);}
+  .rank{width:18px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted-dim);text-align:center;flex-shrink:0;}
+  .rank.r1{color:#ffd56b;}.rank.r2{color:#c9d3dc;}.rank.r3{color:#e0995f;}
+  .r-avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--violet),var(--teal));display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#0a0d10;flex-shrink:0;position:relative;}
+  /* online = teal glow, offline = grey, paused = amber */
+  .status-dot{position:absolute;bottom:-2px;right:-2px;width:8px;height:8px;border-radius:50%;border:2px solid var(--panel);background:var(--muted-dim);}
+  .status-dot.online{background:var(--teal);box-shadow:0 0 6px var(--teal-glow);}
+  .status-dot.paused-dot{background:var(--amber);box-shadow:0 0 6px var(--amber-glow);}
+  .r-info{flex:1;min-width:0;}
+  .r-name{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .r-name .you-tag{font-size:8px;color:var(--teal);border:1px solid var(--teal);border-radius:3px;padding:1px 4px;letter-spacing:.5px;}
+  .r-meta{font-size:10px;color:var(--muted-dim);margin-top:2px;line-height:1.4;}
+  .r-bar{height:4px;background:var(--panel-2);border-radius:2px;margin-top:5px;overflow:hidden;}
+  .r-bar-fill{height:100%;background:var(--teal);}
+  .r-hours{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted);flex-shrink:0;width:74px;text-align:right;}
 
-  .resource-row{ display:flex; align-items:flex-start; gap:10px; padding:9px; border-radius:var(--radius-sm); background:var(--panel-2); border:1px solid var(--line); margin-bottom:8px; }
-  .resource-icon{ width:26px; height:26px; border-radius:var(--radius-sm); background:var(--bg); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; color:var(--teal); }
-  .resource-info{ flex:1; min-width:0; }
-  .resource-title{ font-size:12px; font-weight:600; display:block; text-decoration:none; color:var(--text); word-break:break-word;}
-  .resource-title:hover{ color:var(--teal); }
-  .resource-meta{ font-size:10px; color:var(--muted-dim); margin-top:2px; }
-  .resources-list{ max-height:140px; overflow-y:auto; padding-right:2px; }
-  .empty-mini{ font-size:11px; color:var(--muted-dim); padding:8px 0; }
+  /* resources / log */
+  .resource-row{display:flex;align-items:flex-start;gap:10px;padding:9px;border-radius:var(--radius-sm);background:var(--panel-2);border:1px solid var(--line);margin-bottom:8px;}
+  .resource-icon{width:26px;height:26px;border-radius:var(--radius-sm);background:var(--bg);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;color:var(--teal);}
+  .resource-info{flex:1;min-width:0;}
+  .resource-title{font-size:12px;font-weight:600;display:block;text-decoration:none;color:var(--text);word-break:break-word;}
+  .resource-title:hover{color:var(--teal);}
+  .resource-meta{font-size:10px;color:var(--muted-dim);margin-top:2px;}
+  .resources-list{max-height:140px;overflow-y:auto;padding-right:2px;}
+  .empty-mini{font-size:11px;color:var(--muted-dim);padding:8px 0;}
+  .log-row{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line-soft);}
+  .log-row:last-child{border-bottom:none;}
+  .log-row .ld-date{width:74px;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted-dim);line-height:1.4;padding-top:1px;}
+  .log-row .ld-hours{width:74px;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--teal);}
+  .log-row .ld-note{flex:1;font-size:12.5px;color:var(--text);line-height:1.4;}
+  .log-row .ld-note.empty{color:var(--muted-dim);font-style:italic;}
+  .log-row .ld-note .who{color:var(--teal);font-weight:600;font-style:normal;}
+  .studylog-empty{font-size:12px;color:var(--muted);padding:16px 0;text-align:center;}
+  .room-activity-list{max-height:280px;overflow-y:auto;padding-right:2px;}
 
-  /* study log / notes */
-  .log-row{ display:flex; gap:12px; padding:12px 0; border-bottom:1px solid var(--line-soft); }
-  .log-row:last-child{ border-bottom:none; }
-  .log-row .ld-date{ width:74px; flex-shrink:0; font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--muted-dim); line-height:1.4; padding-top:1px;}
-  .log-row .ld-hours{ width:74px; flex-shrink:0; font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600; color:var(--teal); }
-  .log-row .ld-note{ flex:1; font-size:12.5px; color:var(--text); line-height:1.4; }
-  .log-row .ld-note.empty{ color:var(--muted-dim); font-style:italic; }
-  .log-row .ld-note .who{ color:var(--teal); font-weight:600; font-style:normal; }
-  .studylog-empty{ font-size:12px; color:var(--muted); padding:16px 0; text-align:center; }
-
-  /* room-wide study log feed */
-  .room-activity-list{ max-height:280px; overflow-y:auto; padding-right:2px; }
-
-  /* ---------- buttons / inputs ---------- */
-  .btn{ font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600; border-radius:var(--radius-sm); border:1px solid var(--line); background:var(--panel-2); color:var(--text); padding:9px 14px; cursor:pointer; transition:.15s; }
-  .btn:hover{ border-color:var(--muted-dim); }
-  .btn-primary{ background:var(--teal); color:#06120f; border-color:var(--teal); }
-  .btn-primary:hover{ box-shadow:0 0 14px var(--teal-glow); }
-  .btn-ghost{ background:transparent; }
-  .btn-block{ width:100%; }
-  .btn-sm{ padding:6px 10px; font-size:11px; }
-  input[type="text"], input[type="number"], input[type="url"], input[type="password"], textarea{
-    width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius-sm);
-    color:var(--text); padding:10px 12px; font-family:'JetBrains Mono',monospace; font-size:13px; resize:vertical;
+  /* buttons / inputs */
+  .btn{font-family:'Inter',sans-serif;font-size:12.5px;font-weight:600;border-radius:var(--radius-sm);border:1px solid var(--line);background:var(--panel-2);color:var(--text);padding:9px 14px;cursor:pointer;transition:.15s;}
+  .btn:hover{border-color:var(--muted-dim);}
+  .btn-primary{background:var(--teal);color:#06120f;border-color:var(--teal);}
+  .btn-primary:hover{box-shadow:0 0 14px var(--teal-glow);}
+  .btn-ghost{background:transparent;}
+  .btn-block{width:100%;}
+  .btn-sm{padding:6px 10px;font-size:11px;}
+  input[type="text"],input[type="number"],input[type="url"],input[type="password"],textarea{
+    width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius-sm);
+    color:var(--text);padding:10px 12px;font-family:'JetBrains Mono',monospace;font-size:13px;resize:vertical;
   }
-  textarea{ font-family:'Inter',sans-serif; font-size:13px; min-height:64px; }
-  input::placeholder, textarea::placeholder{ color:var(--muted-dim); font-family:'Inter',sans-serif; }
-  label.field-label{ font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted-dim); display:block; margin-bottom:6px; }
-  .field{ margin-bottom:14px; }
-  .chip-row{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
-  .chip{ font-family:'JetBrains Mono',monospace; font-size:11px; padding:5px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); cursor:pointer; }
-  .chip:hover{ color:var(--text); border-color:var(--muted-dim); }
+  textarea{font-family:'Inter',sans-serif;font-size:13px;min-height:64px;}
+  input::placeholder,textarea::placeholder{color:var(--muted-dim);font-family:'Inter',sans-serif;}
+  label.field-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted-dim);display:block;margin-bottom:6px;}
+  .field{margin-bottom:14px;}
+  .chip-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+  .chip{font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);cursor:pointer;}
+  .chip:hover{color:var(--text);border-color:var(--muted-dim);}
 
-  /* ---------- log dock ---------- */
-  .log-dock{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:8px 8px 8px 18px; display:flex; align-items:center; gap:10px; box-shadow:0 10px 30px rgba(0,0,0,.5); z-index:40; }
-  .log-dock .timer-display{ font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:600; min-width:70px; }
-  .log-dock .timer-display.running{ color:var(--teal); }
-  .dot-live{ width:7px; height:7px; border-radius:50%; background:var(--teal); box-shadow:0 0 8px var(--teal-glow); display:none; }
-  .dot-live.show{ display:inline-block; animation:pulse 1.4s infinite; }
-  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.3;} }
-
-  /* ---------- modal ---------- */
-  .modal-bg{ position:fixed; inset:0; background:rgba(5,7,9,.7); backdrop-filter:blur(3px); display:none; align-items:center; justify-content:center; z-index:100; padding:20px;}
-  .modal-bg.show{ display:flex; }
-  .modal{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:26px; width:100%; max-width:400px; max-height:90vh; overflow-y:auto;}
-  .modal-title{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:17px; margin-bottom:4px; }
-  .modal-desc{ font-size:12px; color:var(--muted); margin-bottom:18px; line-height:1.5; }
-  .modal-actions{ display:flex; gap:8px; margin-top:6px; }
-  .modal-foot-link{ font-size:11px; color:var(--muted-dim); text-align:center; margin-top:14px; cursor:pointer; }
-  .modal-foot-link:hover{ color:var(--muted); }
-  .tabs{ display:flex; gap:4px; background:var(--panel-2); border-radius:var(--radius-sm); padding:3px; margin-bottom:16px;}
-  .tab{ flex:1; text-align:center; font-size:11px; padding:7px; border-radius:5px; cursor:pointer; color:var(--muted); font-weight:600; }
-  .tab.active{ background:var(--panel); color:var(--text); }
-  .notice{ font-size:10.5px; color:var(--muted-dim); background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius-sm); padding:9px 10px; line-height:1.45; margin-top:4px;}
-  .divider{ height:1px; background:var(--line); margin:18px 0; }
-  .settings-row-actions{ display:flex; gap:8px; }
-
-  .toast{ position:fixed; top:18px; right:18px; left:18px; max-width:320px; margin-left:auto; background:var(--panel); border:1px solid var(--teal); border-radius:var(--radius-sm); padding:12px 16px; font-size:12px; z-index:200; box-shadow:0 0 20px var(--teal-glow); opacity:0; transform:translateY(-10px); transition:.3s; pointer-events:none;}
-  .toast.show{ opacity:1; transform:translateY(0); }
-  .toast .tt{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:13px; color:var(--teal); margin-bottom:2px;}
-
-  ::-webkit-scrollbar{ width:6px; } ::-webkit-scrollbar-thumb{ background:var(--line); border-radius:3px; }
-  :focus-visible{ outline:2px solid var(--teal); outline-offset:2px; }
-
-  /* ---------- full-screen timer hero ---------- */
+  /* timer hero */
   .timer-hero{
-    position:relative;
-    background:var(--panel);
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    margin-bottom:18px;
-    overflow:hidden;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    min-height:280px;
-    padding:40px 28px;
+    position:relative;background:var(--panel);border:1px solid var(--line);
+    border-radius:var(--radius);margin-bottom:18px;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;min-height:300px;padding:40px 28px;
   }
-  .timer-hero::before{
-    content:'';
-    position:absolute; inset:0;
-    background:radial-gradient(ellipse 70% 70% at 50% 50%, rgba(79,227,193,.04), transparent);
-    pointer-events:none;
-  }
-  .timer-hero::after{
-    content:'';
-    position:absolute; top:0; left:0; right:0; height:1px;
-    background:linear-gradient(90deg, transparent, var(--teal-glow), transparent);
-  }
-  .timer-hero.running{
-    border-color:rgba(79,227,193,.35);
-    box-shadow:0 0 40px rgba(79,227,193,.06);
-  }
-  .timer-hero-inner{
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    gap:16px;
-    text-align:center;
-    position:relative;
-    z-index:1;
-    width:100%;
-  }
-  .timer-eyebrow{
-    display:flex;
-    align-items:center;
-    gap:8px;
-    font-size:11px;
-    letter-spacing:2px;
-    text-transform:uppercase;
-    color:var(--muted-dim);
-    font-weight:600;
-  }
-  .timer-eyebrow .dot-live{ flex-shrink:0; }
-  #timerStatusLabel.live{ color:var(--teal); }
-  .timer-clock{
-    font-size:clamp(56px, 10vw, 88px);
-    font-weight:700;
-    letter-spacing:-2px;
-    color:var(--text);
-    line-height:1;
-    transition:color .3s;
-  }
-  .timer-clock.running{ color:var(--teal); text-shadow:0 0 40px var(--teal-glow); }
-  .timer-sub{
-    font-size:13px;
-    color:var(--muted);
-    max-width:340px;
-    line-height:1.5;
-  }
-  .timer-actions{ display:flex; gap:10px; margin-top:4px; }
-  .timer-btn-start{
-    font-size:14px;
-    font-weight:700;
-    padding:13px 36px;
-    border-radius:999px;
-    background:var(--teal);
-    color:#06120f;
-    border:none;
-    cursor:pointer;
-    letter-spacing:.5px;
-    transition:.2s;
-    font-family:'Space Grotesk',sans-serif;
-  }
-  .timer-btn-start:hover{ box-shadow:0 0 24px var(--teal-glow); transform:scale(1.03); }
-  .timer-btn-stop{
-    font-size:14px;
-    font-weight:700;
-    padding:13px 36px;
-    border-radius:999px;
-    background:transparent;
-    color:var(--danger);
-    border:1.5px solid var(--danger);
-    cursor:pointer;
-    letter-spacing:.5px;
-    transition:.2s;
-    font-family:'Space Grotesk',sans-serif;
-  }
-  .timer-btn-stop:hover{ background:rgba(255,107,107,.1); }
+  .timer-hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 70% 70% at 50% 50%,rgba(79,227,193,.04),transparent);pointer-events:none;}
+  .timer-hero::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--teal-glow),transparent);}
+  .timer-hero.running{border-color:rgba(79,227,193,.35);box-shadow:0 0 40px rgba(79,227,193,.06);}
+  .timer-hero.paused{border-color:rgba(242,169,59,.35);box-shadow:0 0 40px rgba(242,169,59,.06);}
+  .timer-hero-inner{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;position:relative;z-index:1;width:100%;}
+  .timer-eyebrow{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted-dim);font-weight:600;}
+  #timerStatusLabel.live{color:var(--teal);}
+  #timerStatusLabel.paused-lbl{color:var(--amber);}
+  .timer-clock{font-size:clamp(56px,10vw,88px);font-weight:700;letter-spacing:-2px;color:var(--text);line-height:1;transition:color .3s;}
+  .timer-clock.running{color:var(--teal);text-shadow:0 0 40px var(--teal-glow);}
+  .timer-clock.paused{color:var(--amber);text-shadow:0 0 40px var(--amber-glow);}
+  .timer-sub{font-size:13px;color:var(--muted);max-width:360px;line-height:1.5;}
+  .timer-ring{position:absolute;inset:-24px;border-radius:50%;border:1.5px solid var(--teal-glow);display:none;animation:ringPulse 2s infinite;}
+  .timer-hero.running .timer-ring{display:block;}
+  @keyframes ringPulse{0%,100%{opacity:.5;transform:scale(1);}50%{opacity:.1;transform:scale(1.04);}}
+  .timer-actions{display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;justify-content:center;}
+  .timer-btn-start{font-size:14px;font-weight:700;padding:13px 36px;border-radius:999px;background:var(--teal);color:#06120f;border:none;cursor:pointer;letter-spacing:.5px;transition:.2s;font-family:'Space Grotesk',sans-serif;}
+  .timer-btn-start:hover{box-shadow:0 0 24px var(--teal-glow);transform:scale(1.03);}
+  .timer-btn-pause{font-size:14px;font-weight:700;padding:13px 32px;border-radius:999px;background:transparent;color:var(--amber);border:1.5px solid var(--amber);cursor:pointer;letter-spacing:.5px;transition:.2s;font-family:'Space Grotesk',sans-serif;}
+  .timer-btn-pause:hover{background:rgba(242,169,59,.1);}
+  .timer-btn-stop{font-size:14px;font-weight:700;padding:13px 32px;border-radius:999px;background:transparent;color:var(--danger);border:1.5px solid var(--danger);cursor:pointer;letter-spacing:.5px;transition:.2s;font-family:'Space Grotesk',sans-serif;}
+  .timer-btn-stop:hover{background:rgba(255,107,107,.1);}
 
-  /* live ring pulse around clock */
-  .timer-ring{
-    position:absolute;
-    inset:-24px;
-    border-radius:50%;
-    border:1.5px solid var(--teal-glow);
-    display:none;
-    animation:ringPulse 2s infinite;
-  }
-  .timer-hero.running .timer-ring{ display:block; }
-  @keyframes ringPulse{ 0%,100%{opacity:.5;transform:scale(1);} 50%{opacity:.1;transform:scale(1.04);} }
+  /* topic input */
+  #preSessionTopicField{width:100%;max-width:320px;}
+  #preSessionTopicField input{text-align:center;}
 
-  /* session time badge in modal */
-  .session-time-badge{
-    display:block;
-    text-align:center;
-    font-size:38px;
-    font-weight:700;
-    color:var(--teal);
-    letter-spacing:-1px;
-    background:var(--panel-2);
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    padding:16px;
-    margin-bottom:16px;
-    text-shadow:0 0 20px var(--teal-glow);
+  /* restore banner */
+  .restore-banner{
+    display:none;background:rgba(79,227,193,.08);border:1px solid rgba(79,227,193,.4);
+    border-radius:var(--radius-sm);padding:9px 14px;font-size:12px;color:var(--teal);
+    line-height:1.45;max-width:420px;text-align:center;
   }
+  .restore-banner.paused-banner{background:rgba(242,169,59,.08);border-color:rgba(242,169,59,.4);color:var(--amber);}
+
+  /* log dock */
+  .log-dock{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:8px 8px 8px 18px;display:flex;align-items:center;gap:10px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:40;}
+  .log-dock .timer-display{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600;min-width:70px;}
+  .log-dock .timer-display.running{color:var(--teal);}
+  .dot-live{width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 8px var(--teal-glow);display:none;}
+  .dot-live.show{display:inline-block;animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+  /* modal */
+  .modal-bg{position:fixed;inset:0;background:rgba(5,7,9,.7);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;}
+  .modal-bg.show{display:flex;}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:26px;width:100%;max-width:400px;max-height:90vh;overflow-y:auto;}
+  .modal-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;margin-bottom:4px;}
+  .modal-desc{font-size:12px;color:var(--muted);margin-bottom:18px;line-height:1.5;}
+  .modal-actions{display:flex;gap:8px;margin-top:6px;}
+  .modal-foot-link{font-size:11px;color:var(--muted-dim);text-align:center;margin-top:14px;cursor:pointer;}
+  .modal-foot-link:hover{color:var(--muted);}
+  .tabs{display:flex;gap:4px;background:var(--panel-2);border-radius:var(--radius-sm);padding:3px;margin-bottom:16px;}
+  .tab{flex:1;text-align:center;font-size:11px;padding:7px;border-radius:5px;cursor:pointer;color:var(--muted);font-weight:600;}
+  .tab.active{background:var(--panel);color:var(--text);}
+  .notice{font-size:10.5px;color:var(--muted-dim);background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius-sm);padding:9px 10px;line-height:1.45;margin-top:4px;}
+  .divider{height:1px;background:var(--line);margin:18px 0;}
+  .settings-row-actions{display:flex;gap:8px;}
+  .session-time-badge{display:block;text-align:center;font-size:38px;font-weight:700;color:var(--teal);letter-spacing:-1px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:16px;text-shadow:0 0 20px var(--teal-glow);}
+  .toast{position:fixed;top:18px;right:18px;left:18px;max-width:320px;margin-left:auto;background:var(--panel);border:1px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:12px;z-index:200;box-shadow:0 0 20px var(--teal-glow);opacity:0;transform:translateY(-10px);transition:.3s;pointer-events:none;}
+  .toast.show{opacity:1;transform:translateY(0);}
+  .toast .tt{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;color:var(--teal);margin-bottom:2px;}
+  ::-webkit-scrollbar{width:6px;}::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px;}
+  :focus-visible{outline:2px solid var(--teal);outline-offset:2px;}
 </style>
 </head>
 <body>
-<button class="sidebar-toggle" id="sidebarToggle" title="Menu">☰</button>
-<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<div class="app" id="app">
 
-<div class="layout">
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-brand">
+  <div class="topbar">
+    <div class="brand">
       <div class="brand-mark"></div>
       <div class="brand-text">
         <span class="name">STUDYGRID</span>
         <span class="tag">3000HR Mission Tracker</span>
       </div>
     </div>
-
-    <nav class="sidebar-nav">
-      <a class="nav-item active" data-target="dashboardSection"><span class="nav-ic">◧</span> Dashboard</a>
-      <a class="nav-item" data-target="timerHero"><span class="nav-ic">⏱</span> Timer</a>
-      <a class="nav-item" data-target="roomSection"><span class="nav-ic">◎</span> Room</a>
-      <a class="nav-item" data-target="studyLogSection"><span class="nav-ic">▤</span> Study Log</a>
-    </nav>
-
-    <div class="sidebar-divider"></div>
-
-    <nav class="sidebar-nav">
-      <button class="nav-item" id="settingsBtn"><span class="nav-ic">⚙</span> Settings</button>
-    </nav>
-
-    <div class="sidebar-spacer"></div>
-
-    <div class="profile-pill" id="profilePill">
-      <div class="avatar" id="pillAvatar">—</div>
-      <div>
-        <div class="pname" id="pillName">—</div>
-        <div class="plevel" id="pillLevel">LV.1</div>
+    <div class="top-right">
+      <div class="profile-pill" id="profilePill">
+        <div class="avatar" id="pillAvatar">—</div>
+        <div>
+          <div class="pname" id="pillName">—</div>
+          <div class="plevel" id="pillLevel">LV.1</div>
+        </div>
       </div>
+      <div class="icon-btn" id="settingsBtn" title="Settings">⚙</div>
     </div>
-  </aside>
+  </div>
 
-  <div class="main">
-<div class="app" id="app">
-
-  <div class="hero" id="dashboardSection">
+  <div class="hero">
     <div class="hero-top">
       <div>
         <div class="eyebrow">Mission · 3000 Hours</div>
@@ -426,47 +267,55 @@
       </div>
     </div>
     <div class="trace-wrap">
-      <div class="trace"><div class="trace-fill" id="heroTrace" style="--c:var(--teal); --c-glow:var(--teal-glow);"><div class="edge"></div></div></div>
+      <div class="trace"><div class="trace-fill" id="heroTrace" style="--c:var(--teal);--c-glow:var(--teal-glow);"><div class="edge"></div></div></div>
       <div class="ticks" id="heroTicks"></div>
     </div>
-    
-    <!-- ADDED: NEW DAILY PROGRESS BAR INSIDE HERO -->
-    <div class="trace-wrap" style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line);">
-      <div class="eyebrow" style="margin-bottom: 8px; color:var(--amber);">Daily Progress</div>
-      <div class="trace"><div class="trace-fill" id="heroDailyTrace" style="--c:var(--amber); --c-glow:var(--amber-glow);"><div class="edge"></div></div></div>
-      <div style="display:flex; justify-content:space-between; margin-top:6px; font-size:11px; color:var(--muted-dim); font-family:'JetBrains Mono',monospace;">
+    <div class="trace-wrap" style="margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);">
+      <div class="eyebrow" style="margin-bottom:8px;color:var(--amber);">Daily Progress</div>
+      <div class="trace"><div class="trace-fill" id="heroDailyTrace" style="--c:var(--amber);--c-glow:var(--amber-glow);"><div class="edge"></div></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--muted-dim);font-family:'JetBrains Mono',monospace;">
         <span id="heroDailyLabel">00:00:00 / 04:00:00</span>
         <span id="heroDailyPct">0%</span>
       </div>
     </div>
   </div>
 
-  <!-- TIMER -->
+  <!-- ── TIMESTAMP-BASED TIMER ── -->
   <div class="timer-hero" id="timerHero">
     <div class="timer-hero-inner">
       <div class="timer-eyebrow">
         <span class="dot-live" id="dockDot"></span>
         <span id="timerStatusLabel">READY</span>
       </div>
-      <div style="position:relative; display:inline-block;">
+      <div style="position:relative;display:inline-block;">
+        <div class="timer-ring"></div>
         <div class="timer-clock mono" id="timerDisplay">00:00:00</div>
       </div>
-      
-      <!-- Pre-Session Topic Input Field -->
-      <div class="field" id="preSessionTopicField" style="width:100%; max-width:320px; margin:4px auto 0;">
+
+      <!-- restore notice shown when a running/paused session is recovered on page load -->
+      <div class="restore-banner" id="timerRestoreBanner"></div>
+
+      <!-- topic input — hidden while session is active/paused -->
+      <div id="preSessionTopicField" style="width:100%;max-width:320px;">
         <input type="text" id="preSessionTopic" placeholder="What are you going to study?">
       </div>
 
-      <div class="timer-sub" id="timerSub">Enter your topic above and launch a session to start tracking</div>
+      <div class="timer-sub" id="timerSub">Enter your topic above and start a session</div>
+
       <div class="timer-actions">
-        <button class="btn timer-btn-start" id="timerToggle">▶ Start Session</button>
+        <!-- IDLE -->
+        <button class="timer-btn-start" id="timerStart">▶ Start Session</button>
+        <!-- ACTIVE -->
+        <button class="timer-btn-pause" id="timerPause"  style="display:none;">⏸ Pause</button>
+        <button class="timer-btn-stop"  id="timerStop"   style="display:none;">⏹ Stop &amp; Log</button>
+        <!-- PAUSED -->
+        <button class="timer-btn-start" id="timerResume"        style="display:none;">▶ Resume</button>
+        <button class="timer-btn-stop"  id="timerStopFromPause" style="display:none;">⏹ Stop &amp; Log</button>
       </div>
     </div>
   </div>
 
   <div class="grid-main">
-
-    <!-- DAILY GOAL -->
     <div class="card">
       <div class="card-head">
         <div>
@@ -476,23 +325,20 @@
       </div>
       <div class="daily-readout mono" id="dailyHours">00:00:00</div>
       <div class="daily-of" id="dailyOf">/ 04:00:00 goal</div>
-      <div class="trace"><div class="trace-fill" id="dailyTrace" style="--c:var(--amber); --c-glow:var(--amber-glow);"><div class="edge"></div></div></div>
+      <div class="trace"><div class="trace-fill" id="dailyTrace" style="--c:var(--amber);--c-glow:var(--amber-glow);"><div class="edge"></div></div></div>
       <div class="goal-met" id="goalMetTag">⬢ DAILY GOAL CLEARED</div>
       <div class="reset-countdown">
         <span>Resets in</span>
         <span class="t mono" id="resetCountdown">--:--:--</span>
       </div>
     </div>
-
-    <!-- LEVEL -->
     <div class="card">
       <div class="card-head">
         <div>
-          <div class="card-title">Level (jeta tor nai)</div>
-          <div class="card-sub">Your TITLE below</div>
+          <div class="card-title">Level</div>
+          <div class="card-sub">Your title below</div>
         </div>
-        <!-- ADDED: VIEW LEVELS BUTTON -->
-        <button class="btn btn-ghost btn-sm" id="openLevelsModalBtn" style="color:var(--violet); border-color:var(--line);">View Levels</button>
+        <button class="btn btn-ghost btn-sm" id="openLevelsModalBtn" style="color:var(--violet);border-color:var(--line);">View Levels</button>
       </div>
       <div class="level-top">
         <div class="level-ring"><span class="num mono" id="levelNum">1</span></div>
@@ -501,14 +347,13 @@
           <div class="level-xp" id="levelXp">0 / 500 XP</div>
         </div>
       </div>
-      <div class="trace"><div class="trace-fill" id="xpTrace" style="--c:var(--violet); --c-glow:var(--violet-glow);"><div class="edge"></div></div></div>
+      <div class="trace"><div class="trace-fill" id="xpTrace" style="--c:var(--violet);--c-glow:var(--violet-glow);"><div class="edge"></div></div></div>
       <div class="xp-to-next" id="xpToNext">500 XP to next level</div>
     </div>
-
   </div>
 
   <!-- ROOM -->
-  <div class="card room-card" id="roomSection">
+  <div class="card room-card">
     <div class="card-head">
       <div>
         <div class="card-title">Room</div>
@@ -516,29 +361,24 @@
       </div>
       <span class="group-code-display" id="groupCodeDisplay" style="display:none;"></span>
     </div>
-
     <div class="room-empty" id="friendsEmpty">
       <p>Join or start a room to compare progress and trade study material with other engineers grinding toward 3,000 hours.</p>
       <button class="btn btn-primary" id="openGroupModalBtn">Join / Create Room</button>
     </div>
-
     <div class="room-grid" id="roomGrid" style="display:none;">
       <div>
-        <div class="room-pane-title">Members & 3,000 HR Progress</div>
+        <div class="room-pane-title">Members &amp; 3,000 HR Progress</div>
         <div class="roster" id="roster"></div>
       </div>
-      <div style="display:flex; flex-direction:column; gap:16px;">
-        
-        <!-- Live Chat Container -->
-        <div class="card" style="background:var(--panel-2); border:1px solid var(--line); padding:12px; height:220px; display:flex; flex-direction:column; margin:0;">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card" style="background:var(--panel-2);border:1px solid var(--line);padding:12px;height:220px;display:flex;flex-direction:column;margin:0;">
           <div class="room-pane-title">Room Live Chat</div>
-          <div id="chatMessages" style="flex:1; overflow-y:auto; font-size:12px; margin-bottom:8px; display:flex; flex-direction:column; gap:4px; padding-right:4px;"></div>
-          <div style="display:flex; gap:6px;">
-            <input type="text" id="chatInput" placeholder="Type a message..." style="padding:6px 10px; height:30px;">
-            <button class="btn btn-primary btn-sm" id="sendChatBtn" style="padding:4px 10px; height:30px;">Send</button>
+          <div id="chatMessages" style="flex:1;overflow-y:auto;font-size:12px;margin-bottom:8px;display:flex;flex-direction:column;gap:4px;padding-right:4px;"></div>
+          <div style="display:flex;gap:6px;">
+            <input type="text" id="chatInput" placeholder="Type a message..." style="padding:6px 10px;height:30px;">
+            <button class="btn btn-primary btn-sm" id="sendChatBtn" style="padding:4px 10px;height:30px;">Send</button>
           </div>
         </div>
-
         <div>
           <div class="room-pane-title">
             <span>Shared resources</span>
@@ -550,36 +390,34 @@
       <div style="grid-column:1 / -1;">
         <div class="room-pane-title" style="margin-top:6px;">
           <span>Room study log</span>
-          <span style="text-transform:none; letter-spacing:0; font-size:10px;">what everyone's been working on</span>
+          <span style="text-transform:none;letter-spacing:0;font-size:10px;">what everyone's been working on</span>
         </div>
         <div class="room-activity-list" id="roomActivityList"></div>
       </div>
     </div>
-    <button class="btn btn-ghost btn-sm" id="leaveGroupBtn" style="display:none; margin-top:14px; width:fit-content;">Leave room</button>
+    <button class="btn btn-ghost btn-sm" id="leaveGroupBtn" style="display:none;margin-top:14px;width:fit-content;">Leave room</button>
   </div>
 
-  <!-- STUDY LOG / NOTES -->
-  <div class="card" id="studyLogSection">
+  <!-- STUDY LOG -->
+  <div class="card">
     <div class="card-head">
       <div>
         <div class="card-title">Study Log</div>
         <div class="card-sub">What you've been working on</div>
       </div>
     </div>
-    <div id="studyLogList"><div class="studylog-empty">No sessions logged yet. Log your first hours below.</div></div>
+    <div id="studyLogList"><div class="studylog-empty">No sessions logged yet.</div></div>
   </div>
 
-</div>
-  </div>
-</div>
+</div><!-- /app -->
 
-<!-- ONBOARDING MODAL -->
+<!-- ONBOARDING -->
 <div class="modal-bg" id="onboardModal">
   <div class="modal">
     <div class="modal-title">Welcome to STUDYGRID</div>
-    <div class="modal-desc">Type your unique name and password. If the cloud profile exists, it validates parameters to log you in.</div>
+    <div class="modal-desc">Enter your username and password. Existing cloud profiles will load automatically.</div>
     <div class="field">
-      <label class="field-label">Your profile username</label>
+      <label class="field-label">Username</label>
       <input type="text" id="onboardName" placeholder="e.g. Leo" maxlength="20">
     </div>
     <div class="field">
@@ -594,14 +432,14 @@
   </div>
 </div>
 
-<!-- SETTINGS MODAL -->
+<!-- SETTINGS -->
 <div class="modal-bg" id="settingsModal">
   <div class="modal">
     <div class="modal-title">Settings</div>
     <div class="field">
       <label class="field-label">Your name</label>
       <input type="text" id="settingsName" maxlength="20" disabled>
-      <span style="font-size:9px; color:var(--muted-dim)">Names match cloud data entries and cannot be changed.</span>
+      <span style="font-size:9px;color:var(--muted-dim);">Names match cloud data entries and cannot be changed.</span>
     </div>
     <div class="field">
       <label class="field-label">Daily study goal (hours)</label>
@@ -611,16 +449,14 @@
       <button class="btn btn-block" id="settingsCancel">Cancel</button>
       <button class="btn btn-primary btn-block" id="settingsSave">Save</button>
     </div>
-
     <div class="divider"></div>
     <label class="field-label">Backup</label>
-    <div class="notice" style="margin-bottom:10px;">Your progress already autosaves to your cloud profile sync. For an extra copy in Google Drive, export a backup file below and upload it to Drive manually.</div>
+    <div class="notice" style="margin-bottom:10px;">Progress autosaves to your cloud profile. Export a local backup below.</div>
     <div class="settings-row-actions">
       <button class="btn btn-block btn-sm" id="exportBtn">Export backup</button>
       <button class="btn btn-block btn-sm" id="importBtn">Import backup</button>
     </div>
     <input type="file" id="importFile" accept="application/json" style="display:none;">
-
     <div class="modal-foot-link" id="resetDataBtn">Reset all my data</div>
   </div>
 </div>
@@ -629,10 +465,10 @@
 <div class="modal-bg" id="logModal">
   <div class="modal">
     <div class="modal-title" id="logModalTitle">Save your session</div>
-    <div class="modal-desc" id="logModalDesc">Session complete. Add an additional note if needed.</div>
+    <div class="modal-desc" id="logModalDesc">Session complete. Add a note if needed.</div>
     <div class="session-time-badge mono" id="logTimeBadge">00:00:00</div>
     <div class="field">
-      <label class="field-label">Additional notes (Optional)</label>
+      <label class="field-label">Additional notes (optional)</label>
       <textarea id="logNoteInput" placeholder="e.g. Completed Ch.4 problem set, reviewed errors" style="min-height:90px;"></textarea>
     </div>
     <div class="modal-actions">
@@ -646,7 +482,7 @@
 <div class="modal-bg" id="groupModal">
   <div class="modal">
     <div class="modal-title">Set up a room</div>
-    <div class="modal-desc">Track progress side-by-side with friends preparing for the same exam.</div>
+    <div class="modal-desc">Track progress side-by-side with friends.</div>
     <div class="tabs">
       <div class="tab active" data-tab="join">Join existing</div>
       <div class="tab" data-tab="create">Create new</div>
@@ -663,7 +499,7 @@
         <input type="text" id="createNameInput" placeholder="e.g. BUET Grinders" maxlength="24">
       </div>
     </div>
-    <div class="notice">Your name, study hours, and status become visible to anyone with this room's code. Only share it with people you trust.</div>
+    <div class="notice">Your name, study hours, and status become visible to anyone with this room's code.</div>
     <div class="modal-actions" style="margin-top:14px;">
       <button class="btn btn-block" id="groupCancel">Cancel</button>
       <button class="btn btn-primary btn-block" id="groupSubmit">Continue</button>
@@ -675,7 +511,7 @@
 <div class="modal-bg" id="resourceModal">
   <div class="modal">
     <div class="modal-title">Share a resource</div>
-    <div class="modal-desc">Paste a link to a PDF, Drive doc, or notes folder for your room.</div>
+    <div class="modal-desc">Paste a link to a PDF, Drive doc, or notes folder.</div>
     <div class="field">
       <label class="field-label">Title</label>
       <input type="text" id="resourceTitleInput" placeholder="e.g. Fluid Mechanics formula sheet" maxlength="60">
@@ -691,12 +527,12 @@
   </div>
 </div>
 
-<!-- ADDED: LEVELS MODAL -->
+<!-- LEVELS MODAL -->
 <div class="modal-bg" id="levelsModal">
   <div class="modal" style="max-width:500px;">
     <div class="modal-title">Rank Progression</div>
-    <div class="modal-desc">All unlockable titles, required XP, and study hours needed to reach them.</div>
-    <div class="resources-list" id="levelsModalList" style="max-height: 50vh; margin-bottom: 14px;"></div>
+    <div class="modal-desc">All unlockable titles, required XP, and study hours to reach them.</div>
+    <div class="resources-list" id="levelsModalList" style="max-height:50vh;margin-bottom:14px;"></div>
     <div class="modal-actions">
       <button class="btn btn-block" id="levelsCloseBtn">Close</button>
     </div>
@@ -704,20 +540,22 @@
 </div>
 
 <div class="toast" id="toast">
-  <div class="tt" id="toastTitle">Level up</div>
+  <div class="tt" id="toastTitle"></div>
   <div id="toastBody"></div>
 </div>
 
+<!-- ════════════════════════════════════════════════════════════════════════════
+     SUPABASE CLIENT + STORAGE BRIDGE
+     ════════════════════════════════════════════════════════════════════════════ -->
 <script>
-  // Paste your configuration credentials inside these single quotes
-  const SUPABASE_URL = 'https://shasdgmyagrxkdslnuiu.supabase.co';       
-  const SUPABASE_ANON_KEY = 'sb_publishable_ggdJG-tKTwanwiS-OENB5Q_ymbzkFT2';     
+  const SUPABASE_URL     = 'https://shasdgmyagrxkdslnuiu.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_ggdJG-tKTwanwiS-OENB5Q_ymbzkFT2';
 
   let sb = null;
-  if (SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_URL.startsWith('YOUR_') && window.supabase) {
+  if(SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase){
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   } else {
-    console.warn('STUDYGRID: Supabase is not configured yet.');
+    console.warn('STUDYGRID: Supabase not configured.');
   }
 
   async function sbGet(key){
@@ -726,38 +564,35 @@
       const { data, error } = await sb.from('studygrid_kv').select('value').eq('key', key).maybeSingle();
       if(error || !data) return null;
       return { value: JSON.stringify(data.value) };
-    }catch(e){ console.error('Supabase get failed:', e); return null; }
+    }catch(e){ console.error('sbGet', e); return null; }
   }
   async function sbSet(key, valueString){
     if(!sb) return false;
     try{
       const { error } = await sb.from('studygrid_kv').upsert({ key, value: JSON.parse(valueString), updated_at: new Date().toISOString() });
       return !error;
-    }catch(e){ console.error('Supabase set failed:', e); return false; }
+    }catch(e){ console.error('sbSet', e); return false; }
   }
   async function sbDelete(key){
     if(!sb) return false;
     try{
       const { error } = await sb.from('studygrid_kv').delete().eq('key', key);
       return !error;
-    }catch(e){ console.error('Supabase delete failed:', e); return false; }
+    }catch(e){ return false; }
   }
 
   window.storage = {
     async get(key, isGlobal){
       if(isGlobal) return sbGet(key);
-      try{ const v = localStorage.getItem(key); return v!==null ? { value: v } : null; }
-      catch(e){ console.error('localStorage get failed:', e); return null; }
+      try{ const v = localStorage.getItem(key); return v !== null ? { value: v } : null; }catch(e){ return null; }
     },
     async set(key, value, isGlobal){
       if(isGlobal) return sbSet(key, value);
-      try{ localStorage.setItem(key, value); return true; }
-      catch(e){ console.error('localStorage set failed:', e); return false; }
+      try{ localStorage.setItem(key, value); return true; }catch(e){ return false; }
     },
     async delete(key, isGlobal){
       if(isGlobal) return sbDelete(key);
-      try{ localStorage.removeItem(key); return true; }
-      catch(e){ console.error('localStorage delete failed:', e); return false; }
+      try{ localStorage.removeItem(key); return true; }catch(e){ return false; }
     }
   };
 
@@ -775,46 +610,67 @@
   };
 </script>
 
+<!-- ════════════════════════════════════════════════════════════════════════════
+     APP LOGIC
+     ════════════════════════════════════════════════════════════════════════════ -->
 <script>
 (function(){
-  const GOAL_TOTAL = 3000;
-  const XP_PER_HOUR = 100;
-  const STORAGE_KEY = 'profile-and-stats';
+  /* ── constants ──────────────────────────────────────────────────────────── */
+  const GOAL_TOTAL   = 3000;
+  const XP_PER_HOUR  = 100;
+  const STORAGE_KEY  = 'profile-and-stats';
 
-const LEVEL_TITLES = [
-  {min:1, max:1, title:'Mara Kha'},
-  {min:2, max:3, title:'Tor dhara hobe na'},
-  {min:4, max:4, title:'Struggler'},
-  {min:5, max:5, title:'Backbencher(tui mama onk funny)'},
-  {min:6, max:7, title:'Backshot lover'},
-  {min:8, max:9, title:'Rifat Academy'},
-  {min:10, max:12, title:'BUET CSE or SUST CSE?'},
-  {min:13, max:14, title:'ACS Lover(tui asole gay)'},
-  {min:15, max:16, title:'Syllabus Sesh hoy nai?'},
-  {min:17, max:19, title:'NUET Slavery Dept. confirm'},
-  {min:20, max:24, title:'Asir bae'},
-  {min:25, max:29, title: 'Anas bae'},
-  {min:30, max:35, title:'Tham bae'},
-  {min:36, max:39, title:'BUET 1st confirm'},
-  {min:40, max:44, title:'ALL BD Rank 0'},
-  {min:45, max:49, title:'MIT confirm'},
-  {min:50, max:999, title:'This is Elon Musk'}
-];  
+  const LEVEL_TITLES = [
+    {min:1,  max:1,  title:'Mara Kha'},
+    {min:2,  max:3,  title:'Tor dhara hobe na'},
+    {min:4,  max:4,  title:'Struggler'},
+    {min:5,  max:5,  title:'Backbencher(tui mama onk funny)'},
+    {min:6,  max:7,  title:'Backshot lover'},
+    {min:8,  max:9,  title:'Rifat Academy'},
+    {min:10, max:12, title:'BUET CSE or SUST CSE?'},
+    {min:13, max:14, title:'ACS Lover(tui asole gay)'},
+    {min:15, max:16, title:'Syllabus Sesh hoy nai?'},
+    {min:17, max:19, title:'NUET Slavery Dept. confirm'},
+    {min:20, max:24, title:'Asir bae'},
+    {min:25, max:29, title:'Anas bae'},
+    {min:30, max:35, title:'Tham bae'},
+    {min:36, max:39, title:'BUET 1st confirm'},
+    {min:40, max:44, title:'ALL BD Rank 0'},
+    {min:45, max:49, title:'MIT confirm'},
+    {min:50, max:999,title:'This is Elon Musk'},
+  ];
 
-
+  /* ── app state ──────────────────────────────────────────────────────────── */
   let state = {
-    id: null, name: '', password: '', dailyGoalHours: 4,
-    totalHours: 0, totalXP: 0,
-    dailyLog: {}, sessionHistory: [],
-    groupCode: null, groupName: null
+    id:null, name:'', password:'', dailyGoalHours:4,
+    totalHours:0, totalXP:0,
+    dailyLog:{}, sessionHistory:[],
+    groupCode:null, groupName:null,
   };
 
-  let timer = { running:false, startedAt:null, tickHandle:null, currentTopic:'' };
+  /* ── timer record ───────────────────────────────────────────────────────────
+   * This is the ONLY timer truth. It is persisted to Supabase under
+   * `timer:<userId>` so elapsed time survives a browser close.
+   *
+   * Shape:
+   *   status              : 'idle' | 'active' | 'paused'
+   *   started_at          : ISO-8601 string set when status becomes 'active',
+   *                         null otherwise
+   *   accumulated_seconds : seconds logged in earlier segments (pauses, resumes)
+   *   topic               : what the user typed before starting
+   *
+   * getElapsedMs() always recomputes from these fields so no local counter
+   * ever drifts or loses data when the tab is hidden / closed.
+   * ──────────────────────────────────────────────────────────────────────── */
+  let timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
+
+  let tickHandle      = null; // 1-second DOM refresh – does NOT drive elapsed
+  let heartbeatHandle = null; // pushes lastActive to room every 8 s
   let groupPollHandle = null;
   let cachedGroupData = null;
   let pendingTimerHours = null;
 
-  // ---------- utils ----------
+  /* ── utils ──────────────────────────────────────────────────────────────── */
   function uid(len){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<len;i++) s+=c[Math.floor(Math.random()*c.length)]; return s; }
   function localDateKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function clamp(n,a,b){ return Math.max(a,Math.min(b,n)); }
@@ -822,126 +678,303 @@ const LEVEL_TITLES = [
   function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
   function timeAgo(ts){
     if(!ts) return 'never';
-    const diff = Date.now()-ts;
-    if(diff < 5*60000) return 'active now';
-    if(diff < 3600000) return Math.floor(diff/60000)+'m ago';
-    if(diff < 86400000) return Math.floor(diff/3600000)+'h ago';
-    return Math.floor(diff/86400000)+'d ago';
+    const d = Date.now()-ts;
+    if(d<300000) return 'active now';
+    if(d<3600000) return Math.floor(d/60000)+'m ago';
+    if(d<86400000) return Math.floor(d/3600000)+'h ago';
+    return Math.floor(d/86400000)+'d ago';
   }
 
-  // Converts float hours directly into localized hr:min:sec (hh:mm:ss style)
-  function formatHHMMSS(totalHours) {
-    const totalSeconds = Math.round(totalHours * 3600);
-    const hrs = Math.floor(totalSeconds / 3600);
-    const mins = Math.floor((totalSeconds % 3600) / 60);
-    const secs = totalSeconds % 60;
-    return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  /* Convert milliseconds → hh:mm:ss */
+  function fmtClock(ms){
+    const s = Math.max(0, Math.floor(ms/1000));
+    const h = String(Math.floor(s/3600)).padStart(2,'0');
+    const m = String(Math.floor((s%3600)/60)).padStart(2,'0');
+    const sc = String(s%60).padStart(2,'0');
+    return h+':'+m+':'+sc;
   }
+  /* Convert float hours → hh:mm:ss */
+  function fmtHours(h){ return fmtClock(Math.round((h||0)*3600)*1000); }
 
   function getLevelInfo(xp){
     let level=1, cumulative=0, need=500;
-    while(xp >= cumulative+need){
-      cumulative += need; level++; need = 500 + (level-1)*250;
+    while(xp>=cumulative+need){ cumulative+=need; level++; need=500+(level-1)*250; }
+    const into = xp-cumulative;
+    const titleObj = LEVEL_TITLES.find(t=>level>=t.min&&level<=t.max)||LEVEL_TITLES[LEVEL_TITLES.length-1];
+    return { level, into, need, title:titleObj.title };
+  }
+  function getCumulativeXpForLevel(lv){
+    let c=0,n=500; for(let i=1;i<lv;i++){ c+=n; n+=250; } return c;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     TIMESTAMP-BASED TIMER  –  CORE FUNCTIONS
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  /** Total elapsed milliseconds, recomputed from the persisted record. */
+  function getElapsedMs(){
+    let ms = (timerRecord.accumulated_seconds||0)*1000;
+    if(timerRecord.status==='active' && timerRecord.started_at){
+      ms += Date.now() - new Date(timerRecord.started_at).getTime();
     }
-    const into = xp - cumulative;
-    const titleObj = LEVEL_TITLES.find(t=>level>=t.min && level<=t.max) || LEVEL_TITLES[LEVEL_TITLES.length-1];
-    return { level, into, need, title: titleObj.title };
+    return Math.max(0, ms);
   }
 
-  // ADDED: Calculates the exact cumulative math required for the modal stats.
-  function getCumulativeXpForLevel(targetLevel) {
-    let cumulative = 0;
-    let need = 500;
-    for(let i = 1; i < targetLevel; i++) {
-      cumulative += need;
-      need += 250;
-    }
-    return cumulative;
+  function timerCloudKey(){ return 'timer:'+state.id; }
+
+  /** Write current timerRecord to Supabase.  Fire-and-forget on the fast path. */
+  async function persistTimer(){
+    if(!state.id || !sb) return;
+    await window.storage.set(timerCloudKey(), JSON.stringify(timerRecord), true);
   }
 
-  // ADDED: Populates the Levels modal correctly dynamically generating items
-  function populateLevelsModal() {
-    const list = document.getElementById('levelsModalList');
-    list.innerHTML = '';
-    LEVEL_TITLES.forEach(titleObj => {
-      const requiredXp = getCumulativeXpForLevel(titleObj.min);
-      const requiredHours = requiredXp / XP_PER_HOUR;
-      
-      const div = document.createElement('div');
-      div.className = 'resource-row';
-      div.style.alignItems = 'center'; // added to center the ring nicely
-      div.innerHTML = `
-        <div class="level-ring" style="width:36px; height:36px; min-width:36px; border-width:2px;">
-          <span class="num mono" style="font-size: 13px;">${titleObj.min}</span>
-        </div>
-        <div class="resource-info" style="margin-left: 10px;">
-          <div class="resource-title" style="font-size: 13px;">${escapeHtml(titleObj.title)}</div>
-          <div class="resource-meta">Levels ${titleObj.min}${titleObj.max !== titleObj.min ? ' - '+titleObj.max : ''}</div>
-        </div>
-        <div class="r-hours mono" style="text-align:right; width:auto; min-width:80px;">
-          <div style="color:var(--violet); font-weight:600; font-size:12px;">${requiredXp.toLocaleString()} XP</div>
-          <div style="font-size:10px; color:var(--muted-dim);">${requiredHours.toLocaleString()} HR</div>
-        </div>
-      `;
-      list.appendChild(div);
-    });
-  }
-
-  // ---------- cloud sync storage model ----------
-  async function loadProfile(){
+  /**
+   * On boot: fetch the persisted timer state from Supabase.
+   * Returns true if an active/paused session was recovered.
+   */
+  async function loadPersistedTimer(){
+    if(!state.id) return false;
     try{
-      const r = await window.storage.get(STORAGE_KEY, false);
+      const r = await window.storage.get(timerCloudKey(), true);
       if(r && r.value){
-        state = Object.assign(state, JSON.parse(r.value));
-        return true;
+        const saved = JSON.parse(r.value);
+        if(saved && (saved.status==='active'||saved.status==='paused')){
+          timerRecord = saved;
+          return true;
+        }
       }
-    }catch(e){ }
+    }catch(e){ /* nothing saved yet */ }
     return false;
   }
 
+  /* ── START ──────────────────────────────────────────────────────────────── */
+  async function startTimer(){
+    const topicEl = document.getElementById('preSessionTopic');
+    const topic   = topicEl.value.trim() || 'General Focus';
+    topicEl.disabled = true;
+
+    timerRecord = {
+      status             : 'active',
+      started_at         : new Date().toISOString(),   // ← server-style ISO timestamp
+      accumulated_seconds: 0,
+      topic,
+    };
+    persistTimer(); // async, don't await – keeps UI snappy
+
+    // Live placeholder in session history
+    state.sessionHistory.unshift({ ts:Date.now(), hours:0, note:topic, isLive:true });
+    saveProfile();
+
+    startTick();
+    applyTimerUI();
+    syncGroupSelf();
+  }
+
+  /* ── PAUSE ──────────────────────────────────────────────────────────────── */
+  async function pauseTimer(){
+    if(timerRecord.status!=='active') return;
+    timerRecord.accumulated_seconds = Math.floor(getElapsedMs()/1000);
+    timerRecord.started_at          = null;
+    timerRecord.status              = 'paused';
+    stopTick();
+    persistTimer();
+    applyTimerUI();
+    syncGroupSelf();
+  }
+
+  /* ── RESUME ─────────────────────────────────────────────────────────────── */
+  async function resumeTimer(){
+    if(timerRecord.status!=='paused') return;
+    timerRecord.started_at = new Date().toISOString();  // new segment start
+    timerRecord.status     = 'active';
+    persistTimer();
+    startTick();
+    applyTimerUI();
+    syncGroupSelf();
+  }
+
+  /* ── STOP ───────────────────────────────────────────────────────────────── */
+  async function stopTimerAndLog(){
+    const elapsedMs = getElapsedMs();
+    stopTick();
+
+    // Erase the cloud record — session is over
+    timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
+    persistTimer();
+
+    const topicEl = document.getElementById('preSessionTopic');
+    topicEl.disabled = false;
+    topicEl.value    = '';
+
+    applyTimerUI();
+
+    const hrs = Math.round((elapsedMs/3600000)*100)/100;
+    if(hrs < (30/3600)){
+      // < 30 seconds: silently discard
+      state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
+      saveProfile();
+      render();
+      return;
+    }
+
+    pendingTimerHours = hrs;
+    document.getElementById('logTimeBadge').textContent = fmtClock(elapsedMs);
+    document.getElementById('logNoteInput').value = '';
+    openModal('logModal');
+    syncGroupSelf();
+  }
+
+  /* ── TICK (display only) ────────────────────────────────────────────────── */
+  function startTick(){
+    stopTick();
+    tickHandle = setInterval(()=>{
+      // Recompute from timestamp — accurate even after sleep/background
+      document.getElementById('timerDisplay').textContent = fmtClock(getElapsedMs());
+      if(state.sessionHistory.find(s=>s.isLive)) renderStudyLog();
+    }, 1000);
+  }
+  function stopTick(){ if(tickHandle){ clearInterval(tickHandle); tickHandle=null; } }
+
+  /* ── UI STATE MACHINE ───────────────────────────────────────────────────── */
+  function applyTimerUI(){
+    const s        = timerRecord.status;
+    const isActive = s==='active';
+    const isPaused = s==='paused';
+    const isIdle   = s==='idle';
+
+    const hero    = document.getElementById('timerHero');
+    const display = document.getElementById('timerDisplay');
+    const dot     = document.getElementById('dockDot');
+    const label   = document.getElementById('timerStatusLabel');
+    const sub     = document.getElementById('timerSub');
+    const field   = document.getElementById('preSessionTopicField');
+    const banner  = document.getElementById('timerRestoreBanner');
+
+    // --- buttons ---
+    document.getElementById('timerStart').style.display         = isIdle   ? '' : 'none';
+    document.getElementById('timerPause').style.display         = isActive ? '' : 'none';
+    document.getElementById('timerStop').style.display          = isActive ? '' : 'none';
+    document.getElementById('timerResume').style.display        = isPaused ? '' : 'none';
+    document.getElementById('timerStopFromPause').style.display = isPaused ? '' : 'none';
+
+    // --- hero card ---
+    hero.classList.toggle('running', isActive);
+    hero.classList.toggle('paused',  isPaused);
+    display.classList.toggle('running', isActive);
+    display.classList.toggle('paused',  isPaused);
+    dot.classList.toggle('show', isActive);
+
+    if(isActive){
+      label.textContent = 'LIVE';
+      label.className   = 'live';
+      sub.textContent   = 'Locking in on: '+timerRecord.topic;
+      display.textContent = fmtClock(getElapsedMs());
+      field.style.display = 'none';
+      banner.style.display= 'none';
+    } else if(isPaused){
+      label.textContent = 'PAUSED';
+      label.className   = 'paused-lbl';
+      sub.textContent   = 'Session paused · '+timerRecord.topic+' · Click Resume to continue';
+      display.textContent = fmtClock(getElapsedMs());
+      field.style.display = 'none';
+      banner.style.display= 'none';
+    } else {
+      label.textContent = 'READY';
+      label.className   = '';
+      sub.textContent   = 'Enter your topic above and start a session';
+      display.textContent = '00:00:00';
+      field.style.display = '';
+      banner.style.display= 'none';
+    }
+  }
+
+  /**
+   * Called after loadPersistedTimer() returns true.
+   * Shows a banner explaining the session was recovered and resumes ticking.
+   */
+  function restoreTimerUI(){
+    applyTimerUI();
+    const banner = document.getElementById('timerRestoreBanner');
+
+    if(timerRecord.status==='active'){
+      banner.className = 'restore-banner';
+      banner.textContent = '↩ Session recovered: "'+timerRecord.topic+'" — the clock kept running while you were away.';
+      banner.style.display = 'block';
+      document.getElementById('preSessionTopic').disabled = true;
+      startTick();
+      // Ensure live placeholder exists in history
+      if(!state.sessionHistory.find(s=>s.isLive)){
+        state.sessionHistory.unshift({ ts:Date.now(), hours:0, note:timerRecord.topic, isLive:true });
+      }
+    } else if(timerRecord.status==='paused'){
+      banner.className = 'restore-banner paused-banner';
+      banner.textContent = '↩ Paused session restored: "'+timerRecord.topic+'" ('+fmtClock(getElapsedMs())+' banked). Hit Resume to continue.';
+      banner.style.display = 'block';
+      document.getElementById('preSessionTopic').disabled = true;
+    }
+    setTimeout(()=>{ banner.style.display='none'; }, 7000);
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     HEARTBEAT  –  drives online/offline dots in the room roster
+     Pushes `lastActive` every 8 s independently of the timer. When the tab
+     closes the heartbeats stop → member goes offline after 60 s.
+     ══════════════════════════════════════════════════════════════════════════ */
+  function startHeartbeat(){
+    stopHeartbeat();
+    if(!state.groupCode) return;
+    syncGroupSelf();                            // immediate push
+    heartbeatHandle = setInterval(syncGroupSelf, 8000);
+  }
+  function stopHeartbeat(){
+    if(heartbeatHandle){ clearInterval(heartbeatHandle); heartbeatHandle=null; }
+  }
+
+  /* ── STORAGE ────────────────────────────────────────────────────────────── */
+  async function loadProfile(){
+    try{
+      const r = await window.storage.get(STORAGE_KEY, false);
+      if(r && r.value){ state = Object.assign(state, JSON.parse(r.value)); return true; }
+    }catch(e){}
+    return false;
+  }
   async function saveProfile(){
     try{
       await window.storage.set(STORAGE_KEY, JSON.stringify(state), false);
-      if(state.name) {
-        // Sync profile data fully to cloud key indexed by downcased username
-        await window.storage.set('user-profile:' + state.name.toLowerCase(), JSON.stringify(state), true);
+      if(state.name){
+        await window.storage.set('user-profile:'+state.name.toLowerCase(), JSON.stringify(state), true);
       }
     }catch(e){ console.error('save failed', e); }
   }
 
+  /* ── GROUP SYNC ─────────────────────────────────────────────────────────── */
   async function syncGroupSelf(){
     if(!state.groupCode) return;
     const key = 'group:'+state.groupCode;
     try{
-      let cur = { name: state.groupName || state.groupCode, members:{}, resources:[], messages:[] };
+      let cur = { name:state.groupName||state.groupCode, members:{}, resources:[], messages:[] };
       try{
         const r = await window.storage.get(key, true);
         if(r && r.value) cur = JSON.parse(r.value);
-      }catch(e){ }
-      const lvl = getLevelInfo(state.totalXP);
+      }catch(e){}
+      const lvl   = getLevelInfo(state.totalXP);
       const today = localDateKey();
-      cur.members = cur.members || {};
-      cur.resources = cur.resources || [];
+      cur.members  = cur.members  || {};
+      cur.resources= cur.resources|| [];
       cur.messages = cur.messages || [];
 
-      // Append running state markers to cloud entity parameters
-      let currentTimerState = { running: false, startedAt: null, topic: '' };
-      if (timer.running) {
-        currentTimerState = {
-          running: true,
-          startedAt: timer.startedAt,
-          topic: timer.currentTopic
-        };
-      }
-
       cur.members[state.id] = {
-        name: state.name, totalHours: state.totalHours,
-        level: lvl.level, title: lvl.title,
-        todayHours: state.dailyLog[today]||0,
+        name          : state.name,
+        totalHours    : state.totalHours,
+        level         : lvl.level,
+        title         : lvl.title,
+        todayHours    : state.dailyLog[today]||0,
         dailyGoalHours: state.dailyGoalHours,
-        lastActive: Date.now(),
-        timerState: currentTimerState,
-        recentLog: (state.sessionHistory||[]).filter(s => !s.isLive).slice(0,5).map(s=>({ ts: s.ts, hours: s.hours, note: (s.note||'').slice(0,200) }))
+        lastActive    : Date.now(),   // ← heartbeat timestamp for online/offline
+        // full timerRecord so friends can extrapolate the clock from started_at
+        timerRecord   : { ...timerRecord },
+        recentLog     : (state.sessionHistory||[]).filter(s=>!s.isLive).slice(0,5)
+                          .map(s=>({ ts:s.ts, hours:s.hours, note:(s.note||'').slice(0,200) })),
       };
       if(state.groupName) cur.name = state.groupName;
       await window.storage.set(key, JSON.stringify(cur), true);
@@ -953,7 +986,7 @@ const LEVEL_TITLES = [
     try{
       const r = await window.storage.get('group:'+state.groupCode, true);
       if(r && r.value) return JSON.parse(r.value);
-    }catch(e){ return null; }
+    }catch(e){}
     return null;
   }
 
@@ -961,61 +994,52 @@ const LEVEL_TITLES = [
     if(!state.groupCode) return;
     const key = 'group:'+state.groupCode;
     try{
-      let cur = { name: state.groupName || state.groupCode, members:{}, resources:[], messages:[] };
-      try{
-        const r = await window.storage.get(key, true);
-        if(r && r.value) cur = JSON.parse(r.value);
-      }catch(e){}
-      cur.resources = cur.resources || [];
-      cur.resources.unshift({ id: uid(6), title, url, addedBy: state.id, addedByName: state.name, ts: Date.now() });
+      let cur = { name:state.groupName||state.groupCode, members:{}, resources:[], messages:[] };
+      try{ const r=await window.storage.get(key,true); if(r&&r.value) cur=JSON.parse(r.value); }catch(e){}
+      cur.resources = cur.resources||[];
+      cur.resources.unshift({ id:uid(6), title, url, addedBy:state.id, addedByName:state.name, ts:Date.now() });
       cur.resources = cur.resources.slice(0,30);
       await window.storage.set(key, JSON.stringify(cur), true);
     }catch(e){ console.error('resource share failed', e); }
   }
 
-  // Broadcast chat messages straight through the room data matrix
-  async function sendChatMessage() {
+  async function sendChatMessage(){
     const input = document.getElementById('chatInput');
-    const text = input.value.trim();
-    if (!text || !state.groupCode) return;
+    const text  = input.value.trim();
+    if(!text || !state.groupCode) return;
     input.value = '';
-
-    const key = 'group:' + state.groupCode;
-    try {
-      let cur = { name: state.groupName || state.groupCode, members:{}, resources:[], messages:[] };
-      const r = await window.storage.get(key, true);
-      if(r && r.value) cur = JSON.parse(r.value);
-      cur.messages = cur.messages || [];
-      cur.messages.push({
-        sender: state.name,
-        text: text,
-        ts: Date.now()
-      });
-      if (cur.messages.length > 50) cur.messages.shift();
+    const key = 'group:'+state.groupCode;
+    try{
+      let cur = { name:state.groupName||state.groupCode, members:{}, resources:[], messages:[] };
+      const r = await window.storage.get(key,true);
+      if(r&&r.value) cur=JSON.parse(r.value);
+      cur.messages = cur.messages||[];
+      cur.messages.push({ sender:state.name, text, ts:Date.now() });
+      if(cur.messages.length>50) cur.messages.shift();
       await window.storage.set(key, JSON.stringify(cur), true);
       renderRoom();
-    } catch(e) { console.error('chat broadcast failed', e); }
+    }catch(e){ console.error('chat failed', e); }
   }
 
-  // ---------- toast ----------
+  /* ── TOAST ──────────────────────────────────────────────────────────────── */
   let toastTimeout;
   function showToast(title, body){
     const el = document.getElementById('toast');
     document.getElementById('toastTitle').textContent = title;
-    document.getElementById('toastBody').textContent = body;
+    document.getElementById('toastBody').textContent  = body;
     el.classList.add('show');
     clearTimeout(toastTimeout);
     toastTimeout = setTimeout(()=>el.classList.remove('show'), 3600);
   }
 
-  // ---------- render elements ----------
+  /* ── RENDER HELPERS ─────────────────────────────────────────────────────── */
   function renderTicks(container, totalMax, stepMinor, stepMajor){
     container.innerHTML = '';
     for(let v=stepMinor; v<=totalMax; v+=stepMinor){
-      const pct = (v/totalMax)*100;
-      const isMajor = v % stepMajor === 0;
+      const pct     = (v/totalMax)*100;
+      const isMajor = v%stepMajor===0;
       const t = document.createElement('div');
-      t.className = 'tick' + (isMajor ? ' major' : '');
+      t.className = 'tick'+(isMajor?' major':'');
       t.style.left = pct+'%';
       container.appendChild(t);
       if(isMajor){
@@ -1030,146 +1054,147 @@ const LEVEL_TITLES = [
 
   function render(){
     document.getElementById('pillAvatar').textContent = initials(state.name);
-    document.getElementById('pillName').textContent = state.name || 'Operator';
+    document.getElementById('pillName').textContent   = state.name||'Operator';
     const lvl = getLevelInfo(state.totalXP);
-    document.getElementById('pillLevel').textContent = 'LV.'+lvl.level;
+    document.getElementById('pillLevel').textContent  = 'LV.'+lvl.level;
 
-    const pct = clamp((state.totalHours/GOAL_TOTAL)*100, 0, 100);
-    // Overhaul standard layouts to use hh:mm:ss strings
-    document.getElementById('heroHours').textContent = formatHHMMSS(state.totalHours);
-    document.getElementById('heroPct').textContent = pct.toFixed(1)+'%';
-    document.getElementById('heroRemain').textContent = formatHHMMSS(Math.max(0, GOAL_TOTAL-state.totalHours));
+    const pct = clamp((state.totalHours/GOAL_TOTAL)*100,0,100);
+    document.getElementById('heroHours').textContent  = fmtHours(state.totalHours);
+    document.getElementById('heroPct').textContent    = pct.toFixed(1)+'%';
+    document.getElementById('heroRemain').textContent = fmtHours(Math.max(0,GOAL_TOTAL-state.totalHours));
     const daysActive = Math.max(1, Object.keys(state.dailyLog).length);
-    document.getElementById('heroAvg').textContent = formatHHMMSS(state.totalHours/daysActive);
-    document.getElementById('heroTrace').style.width = pct+'%';
+    document.getElementById('heroAvg').textContent    = fmtHours(state.totalHours/daysActive);
+    document.getElementById('heroTrace').style.width  = pct+'%';
     renderTicks(document.getElementById('heroTicks'), GOAL_TOTAL, 250, 1000);
 
-    const today = localDateKey();
-    const todayHours = state.dailyLog[today] || 0;
-    const dailyPct = clamp((todayHours/state.dailyGoalHours)*100, 0, 100);
-    document.getElementById('dailyDateLabel').textContent = new Date().toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
-    document.getElementById('dailyHours').textContent = formatHHMMSS(todayHours);
-    document.getElementById('dailyOf').textContent = '/ ' + formatHHMMSS(state.dailyGoalHours) + ' goal';
-    document.getElementById('dailyTrace').style.width = dailyPct+'%';
-    document.getElementById('goalMetTag').classList.toggle('show', todayHours >= state.dailyGoalHours);
+    const today      = localDateKey();
+    const todayHours = state.dailyLog[today]||0;
+    const dailyPct   = clamp((todayHours/state.dailyGoalHours)*100,0,100);
+    document.getElementById('dailyDateLabel').textContent = new Date().toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+    document.getElementById('dailyHours').textContent     = fmtHours(todayHours);
+    document.getElementById('dailyOf').textContent        = '/ '+fmtHours(state.dailyGoalHours)+' goal';
+    document.getElementById('dailyTrace').style.width     = dailyPct+'%';
+    document.getElementById('goalMetTag').classList.toggle('show', todayHours>=state.dailyGoalHours);
 
-    // ADDED: Hero Daily trace progress bar logic updating identically
     document.getElementById('heroDailyTrace').style.width = dailyPct+'%';
-    document.getElementById('heroDailyLabel').textContent = formatHHMMSS(todayHours) + ' / ' + formatHHMMSS(state.dailyGoalHours);
-    document.getElementById('heroDailyPct').textContent = dailyPct.toFixed(1) + '%';
+    document.getElementById('heroDailyLabel').textContent = fmtHours(todayHours)+' / '+fmtHours(state.dailyGoalHours);
+    document.getElementById('heroDailyPct').textContent   = dailyPct.toFixed(1)+'%';
 
-    document.getElementById('levelNum').textContent = lvl.level;
+    document.getElementById('levelNum').textContent   = lvl.level;
     document.getElementById('levelTitle').textContent = lvl.title;
-    document.getElementById('levelXp').textContent = lvl.into+' / '+lvl.need+' XP';
-    document.getElementById('xpTrace').style.width = clamp((lvl.into/lvl.need)*100,0,100)+'%';
-    document.getElementById('xpToNext').textContent = (lvl.need-lvl.into)+' XP to next level';
+    document.getElementById('levelXp').textContent    = lvl.into+' / '+lvl.need+' XP';
+    document.getElementById('xpTrace').style.width    = clamp((lvl.into/lvl.need)*100,0,100)+'%';
+    document.getElementById('xpToNext').textContent   = (lvl.need-lvl.into)+' XP to next level';
 
-    renderCountdown();
     renderGroupShell();
     renderStudyLog();
   }
 
   function renderCountdown(){
-    const now = new Date();
-    const next = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0,0,0);
-    let diff = next - now;
-    const h = String(Math.floor(diff/3600000)).padStart(2,'0');
-    const m = String(Math.floor((diff%3600000)/60000)).padStart(2,'0');
-    const s = String(Math.floor((diff%60000)/1000)).padStart(2,'0');
+    const now  = new Date();
+    const next = new Date(now.getFullYear(),now.getMonth(),now.getDate()+1,0,0,0);
+    let diff   = next-now;
+    const h  = String(Math.floor(diff/3600000)).padStart(2,'0');
+    const m  = String(Math.floor((diff%3600000)/60000)).padStart(2,'0');
+    const s  = String(Math.floor((diff%60000)/1000)).padStart(2,'0');
     document.getElementById('resetCountdown').textContent = h+':'+m+':'+s;
   }
 
   function renderGroupShell(){
     const inGroup = !!state.groupCode;
-    document.getElementById('friendsEmpty').style.display = inGroup ? 'none' : 'flex';
-    document.getElementById('roomGrid').style.display = inGroup ? 'grid' : 'none';
-    document.getElementById('leaveGroupBtn').style.display = inGroup ? 'block' : 'none';
+    document.getElementById('friendsEmpty').style.display  = inGroup ? 'none' : 'flex';
+    document.getElementById('roomGrid').style.display      = inGroup ? 'grid' : 'none';
+    document.getElementById('leaveGroupBtn').style.display = inGroup ? 'block': 'none';
     const codeEl = document.getElementById('groupCodeDisplay');
     if(inGroup){
-      codeEl.style.display = 'inline-block';
-      codeEl.textContent = state.groupCode;
-      document.getElementById('squadSub').textContent = state.groupName || 'Active room';
+      codeEl.style.display  = 'inline-block';
+      codeEl.textContent    = state.groupCode;
+      document.getElementById('squadSub').textContent = state.groupName||'Active room';
     } else {
-      codeEl.style.display = 'none';
+      codeEl.style.display  = 'none';
       document.getElementById('squadSub').textContent = 'No room joined';
     }
   }
 
   function renderStudyLog(){
     const list = document.getElementById('studyLogList');
-    if(!state.sessionHistory || state.sessionHistory.length===0){
-      list.innerHTML = '<div class="studylog-empty">No sessions logged yet. Enter details above to begin.</div>';
+    if(!state.sessionHistory||state.sessionHistory.length===0){
+      list.innerHTML = '<div class="studylog-empty">No sessions logged yet.</div>';
       return;
     }
     list.innerHTML = '';
     state.sessionHistory.slice(0,20).forEach(s=>{
-      let dateStr, hoursText, noteText;
-      // Detect if target element structure represents a live ticking item
-      if (s.isLive) {
-        dateStr = '[Active Now]';
-        const elapsedMs = Date.now() - timer.startedAt;
-        hoursText = fmtClock(elapsedMs);
-        noteText = `Studying: <span style="color:var(--teal); font-weight:600;">${escapeHtml(s.note)}...</span>`;
+      let dateStr, hoursText, noteHtml;
+      if(s.isLive){
+        dateStr   = '[Active Now]';
+        hoursText = fmtClock(getElapsedMs());
+        noteHtml  = `Studying: <span style="color:var(--teal);font-weight:600;">${escapeHtml(s.note)}…</span>`;
       } else {
-        const d = new Date(s.ts);
-        dateStr = d.toLocaleDateString(undefined,{month:'short', day:'numeric'}) + ' · ' + d.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'});
-        hoursText = formatHHMMSS(s.hours);
-        noteText = s.note ? escapeHtml(s.note) : 'No notes added';
+        const d   = new Date(s.ts);
+        dateStr   = d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' · '+d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+        hoursText = fmtHours(s.hours);
+        noteHtml  = s.note ? escapeHtml(s.note) : '<span class="empty">No notes added</span>';
       }
       const row = document.createElement('div');
       row.className = 'log-row';
       row.innerHTML = `
         <div class="ld-date">${dateStr}</div>
-        <div class="ld-hours mono" style="color: ${s.isLive ? 'var(--teal)' : 'inherit'}; width:74px;">${hoursText}</div>
-        <div class="ld-note">${noteText}</div>
+        <div class="ld-hours mono" style="color:${s.isLive?'var(--teal)':''};">${hoursText}</div>
+        <div class="ld-note">${noteHtml}</div>
       `;
       list.appendChild(row);
     });
   }
 
-  // Fast loop function to keep running dynamic updates rendering fluidly
-  function runRosterDOMEngine(group) {
+  /* ── ROSTER RENDERER ────────────────────────────────────────────────────── */
+  function runRosterDOMEngine(group){
     const roster = document.getElementById('roster');
-    if(!group || !group.members) return;
-
+    if(!group||!group.members) return;
     const members = Object.entries(group.members).map(([id,m])=>({id,...m}));
     members.sort((a,b)=>b.totalHours-a.totalHours);
     roster.innerHTML = '';
-    
+
     members.forEach((m, i)=>{
-      const row = document.createElement('div');
-      row.className = 'roster-row' + (m.id===state.id ? ' me' : '');
+      const row       = document.createElement('div');
+      row.className   = 'roster-row'+(m.id===state.id?' me':'');
       const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
-      
-      // Calculate target width properties locked to a global 3,000-hour milestone metric
-      const mPct = clamp((m.totalHours / GOAL_TOTAL) * 100, 0, 100);
-      
-      // Implement active checking metrics to render indicator status lights
-      const secondsAgo = m.lastActive ? (Date.now() - m.lastActive) / 1000 : 9999;
-      const isOnline = secondsAgo <= 60; 
-      const statusClass = isOnline ? 'live' : 'idle';
-      
-      // Render running timer indicators on corresponding member panels
-      let runtimeText = '';
-      if (m.timerState && m.timerState.running && isOnline) {
-        const elapsedSeconds = Math.floor((Date.now() - m.timerState.startedAt) / 1000);
-        const h = String(Math.floor(elapsedSeconds / 3600)).padStart(2,'0');
-        const min = String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2,'0');
-        const sec = String(elapsedSeconds % 60).padStart(2,'0');
-        runtimeText = `<span style="color:var(--teal); font-weight:600;"> Studying: ${escapeHtml(m.timerState.topic)} (${h}:${min}:${sec})</span>`;
+      const mPct      = clamp((m.totalHours/GOAL_TOTAL)*100,0,100);
+
+      /* Online/offline: based on heartbeat age (lastActive) */
+      const msSince = m.lastActive ? Date.now()-m.lastActive : 99999999;
+      const isOnline = msSince <= 60000;   // green if heartbeat < 60 s old
+
+      /* Live timer extrapolated from the persisted timerRecord */
+      const tr = m.timerRecord || {};
+      let dotClass  = isOnline ? 'online' : '';  // '' = grey (offline)
+      let runtimeHtml = '';
+
+      if(isOnline && tr.status==='active' && tr.started_at){
+        const accMs   = (tr.accumulated_seconds||0)*1000;
+        const segMs   = Date.now()-new Date(tr.started_at).getTime();
+        const totalMs = Math.max(0, accMs+segMs);
+        dotClass    = 'online';
+        runtimeHtml = `<span style="color:var(--teal);font-weight:600;">▶ ${escapeHtml(tr.topic||'Studying')} &nbsp;${fmtClock(totalMs)}</span>`;
+      } else if(isOnline && tr.status==='paused'){
+        dotClass    = 'paused-dot';
+        const accMs = (tr.accumulated_seconds||0)*1000;
+        runtimeHtml = `<span style="color:var(--amber);">⏸ Paused &nbsp;${escapeHtml(tr.topic||'')} &nbsp;(${fmtClock(accMs)} banked)</span>`;
+      } else if(isOnline){
+        runtimeHtml = m.todayHours>0 ? `Logged ${fmtHours(m.todayHours)} today` : 'Online · idle';
       } else {
-        runtimeText = m.todayHours > 0 ? `Logged ${formatHHMMSS(m.todayHours)} today` : 'Offline / Idle';
+        runtimeHtml = `<span style="color:var(--muted-dim);">Offline</span>`;
       }
 
       row.innerHTML = `
         <div class="rank ${rankClass}">${i+1}</div>
-        <div class="r-avatar">${initials(m.name)}<span class="status-dot ${statusClass}"></span></div>
+        <div class="r-avatar">${initials(m.name)}<span class="status-dot ${dotClass}"></span></div>
         <div class="r-info">
           <div class="r-name">${escapeHtml(m.name)} ${m.id===state.id?'<span class="you-tag">YOU</span>':''}</div>
-          <div class="r-meta">${runtimeText} · Lv.${m.level||1} ${escapeHtml(m.title||'')}</div>
-          <div class="r-bar" title="${mPct.toFixed(1)}% to goal"><div class="r-bar-fill" style="width:${mPct}%;"></div></div>
+          <div class="r-meta">${runtimeHtml} &nbsp;·&nbsp; Lv.${m.level||1} ${escapeHtml(m.title||'')}</div>
+          <div class="r-bar" title="${mPct.toFixed(1)}% to 3000 h goal"><div class="r-bar-fill" style="width:${mPct}%;"></div></div>
+          <div style="font-size:9.5px;color:var(--muted-dim);font-family:'JetBrains Mono',monospace;margin-top:3px;">${fmtHours(m.totalHours)} / 3000:00:00 · ${mPct.toFixed(1)}%</div>
         </div>
-        <div class="r-hours mono" style="font-size:11px; width:74px;">${formatHHMMSS(m.totalHours)}</div>
+        <div class="r-hours mono">${fmtHours(m.totalHours)}</div>
       `;
       roster.appendChild(row);
     });
@@ -1178,10 +1203,10 @@ const LEVEL_TITLES = [
   async function renderRoom(){
     if(!state.groupCode) return;
     const group = await fetchGroup();
-    cachedGroupData = group; 
-    
+    cachedGroupData = group;
     const resList = document.getElementById('resourcesList');
-    if(!group || !group.members){
+
+    if(!group||!group.members){
       document.getElementById('roster').innerHTML = '<div class="empty-mini">No members yet.</div>';
       resList.innerHTML = '<div class="empty-mini">No resources shared yet.</div>';
       return;
@@ -1189,30 +1214,31 @@ const LEVEL_TITLES = [
 
     runRosterDOMEngine(group);
 
-    // Build out UI structures for active chat logs
-    const chatBox = document.getElementById('chatMessages');
-    const messages = group.messages || [];
-    chatBox.innerHTML = '';
-    messages.forEach(msg => {
+    /* chat */
+    const chatBox  = document.getElementById('chatMessages');
+    const messages = group.messages||[];
+    chatBox.innerHTML='';
+    messages.forEach(msg=>{
       const mDiv = document.createElement('div');
-      mDiv.innerHTML = `<span style="color:var(--teal); font-weight:600;">${escapeHtml(msg.sender)}:</span> ${escapeHtml(msg.text)}`;
+      mDiv.innerHTML = `<span style="color:var(--teal);font-weight:600;">${escapeHtml(msg.sender)}:</span> ${escapeHtml(msg.text)}`;
       chatBox.appendChild(mDiv);
     });
     chatBox.scrollTop = chatBox.scrollHeight;
 
-    const resources = group.resources || [];
-    if(resources.length===0){
-      resList.innerHTML = '<div class="empty-mini">No resources shared yet.</div>';
+    /* resources */
+    const resources = group.resources||[];
+    if(!resources.length){
+      resList.innerHTML='<div class="empty-mini">No resources shared yet.</div>';
     } else {
-      resList.innerHTML = '';
+      resList.innerHTML='';
       resources.forEach(r=>{
         const row = document.createElement('div');
         row.className = 'resource-row';
         const safeUrl = (r.url||'').startsWith('http') ? r.url : '#';
-        row.innerHTML = `
+        row.innerHTML=`
           <div class="resource-icon">📄</div>
           <div class="resource-info">
-            <a class="resource-title" href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(r.title||'Untitled link')}</a>
+            <a class="resource-title" href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">${escapeHtml(r.title||'Untitled link')}</a>
             <div class="resource-meta">shared by ${escapeHtml(r.addedByName||'someone')} · ${timeAgo(r.ts)}</div>
           </div>
         `;
@@ -1220,385 +1246,276 @@ const LEVEL_TITLES = [
       });
     }
 
-    const activityFeed = document.getElementById('roomActivityList');
+    /* room activity log */
     const activity = [];
-    const members = Object.entries(group.members).map(([id,m])=>({id,...m}));
-    members.forEach(m=>{
-      (m.recentLog||[]).forEach(s=>activity.push({ id:m.id, name:m.name, ts:s.ts, hours:s.hours, note:s.note }));
+    Object.entries(group.members).forEach(([id,m])=>{
+      (m.recentLog||[]).forEach(s=>activity.push({id, name:m.name, ts:s.ts, hours:s.hours, note:s.note}));
     });
     activity.sort((a,b)=>b.ts-a.ts);
-    if(activity.length===0){
-      activityFeed.innerHTML = '<div class="empty-mini">No study sessions logged in this room yet.</div>';
+    const activityFeed = document.getElementById('roomActivityList');
+    if(!activity.length){
+      activityFeed.innerHTML='<div class="empty-mini">No study sessions logged in this room yet.</div>';
     } else {
-      activityFeed.innerHTML = '';
+      activityFeed.innerHTML='';
       activity.slice(0,30).forEach(s=>{
         const d = new Date(s.ts);
-        const dateStr = d.toLocaleDateString(undefined,{month:'short', day:'numeric'}) + ' · ' + d.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'});
+        const dateStr = d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' · '+d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
         const row = document.createElement('div');
-        row.className = 'log-row';
-        const whoLabel = escapeHtml(s.name) + (s.id===state.id ? ' (you)' : '');
-        row.innerHTML = `
+        row.className='log-row';
+        const who = escapeHtml(s.name)+(s.id===state.id?' (you)':'');
+        row.innerHTML=`
           <div class="ld-date">${dateStr}</div>
-          <div class="ld-hours mono" style="width:74px;">${formatHHMMSS(s.hours)}</div>
-          <div class="ld-note"><span class="who">${whoLabel}</span> — ${s.note ? escapeHtml(s.note) : 'No notes added'}</div>
+          <div class="ld-hours mono">${fmtHours(s.hours)}</div>
+          <div class="ld-note"><span class="who">${who}</span> — ${s.note?escapeHtml(s.note):'No notes added'}</div>
         `;
         activityFeed.appendChild(row);
       });
     }
   }
 
-  // ---------- core storage transactions ----------
+  /* ── ADD STUDY HOURS ────────────────────────────────────────────────────── */
   async function addStudyHoursRecord(hours){
     hours = Math.round(hours*100)/100;
     if(hours<=0) return;
-    const prevLevel = getLevelInfo(state.totalXP).level;
+    const prevLevel     = getLevelInfo(state.totalXP).level;
     const prevMilestone = Math.floor(state.totalHours/500);
 
     state.totalHours += hours;
-    state.totalXP += Math.round(hours*XP_PER_HOUR);
+    state.totalXP    += Math.round(hours*XP_PER_HOUR);
     const today = localDateKey();
-    state.dailyLog[today] = (state.dailyLog[today]||0) + hours;
+    state.dailyLog[today] = (state.dailyLog[today]||0)+hours;
 
     await saveProfile();
     render();
     await syncGroupSelf();
     renderRoom();
 
-    const newLevel = getLevelInfo(state.totalXP).level;
+    const newLevel     = getLevelInfo(state.totalXP).level;
     const newMilestone = Math.floor(state.totalHours/500);
     if(newLevel>prevLevel){
       showToast('Level up → '+newLevel, getLevelInfo(state.totalXP).title);
     } else if(newMilestone>prevMilestone){
-      showToast('Milestone reached', Math.round(newMilestone*500)+' hours logged');
+      showToast('Milestone reached', fmtHours(newMilestone*500)+' logged');
     } else {
-      showToast('Session logged', '+'+formatHHMMSS(hours) + ' · +' + Math.round(hours*XP_PER_HOUR) + ' XP');
+      showToast('Session logged', '+'+fmtClock(hours*3600000)+' · +'+Math.round(hours*XP_PER_HOUR)+' XP');
     }
   }
 
-  // ---------- timer mechanisms ----------
-  function fmtClock(ms){
-    const s = Math.floor(ms/1000);
-    const h = String(Math.floor(s/3600)).padStart(2,'0');
-    const m = String(Math.floor((s%3600)/60)).padStart(2,'0');
-    const sec = String(s%60).padStart(2,'0');
-    return h+':'+m+':'+sec;
-  }
-  function tickTimer(){
-    const elapsed = Date.now()-timer.startedAt;
-    document.getElementById('timerDisplay').textContent = fmtClock(elapsed);
-  }
-  
-  function startTimer(){
-    const topicInput = document.getElementById('preSessionTopic');
-    timer.currentTopic = topicInput.value.trim() || 'General Focus';
-    topicInput.disabled = true;
-
-    timer.running = true; 
-    timer.startedAt = Date.now();
-    
-    // Initialize explicit placeholder item array profiles inside local session histories
-    state.sessionHistory.unshift({
-      ts: Date.now(),
-      hours: 0,
-      note: timer.currentTopic,
-      isLive: true
-    });
-
-    const hero = document.getElementById('timerHero');
-    hero.classList.add('running');
-    document.getElementById('timerDisplay').classList.add('running');
-    document.getElementById('dockDot').classList.add('show');
-    document.getElementById('timerStatusLabel').textContent = 'LIVE';
-    document.getElementById('timerStatusLabel').classList.add('live');
-    document.getElementById('timerSub').textContent = `Locking in on: ${timer.currentTopic}`;
-    const btn = document.getElementById('timerToggle');
-    btn.textContent = '⏹ Stop Session';
-    btn.className = 'timer-btn-stop';
-    
-    timer.tickHandle = setInterval(tickTimer, 1000);
-    syncGroupSelf();
-  }
-
-  function stopTimerAndPromptLog(){
-    clearInterval(timer.tickHandle);
-    const elapsedMs = Date.now()-timer.startedAt;
-    timer.running = false;
-    
-    const topicInput = document.getElementById('preSessionTopic');
-    topicInput.disabled = false;
-    topicInput.value = '';
-
-    const hero = document.getElementById('timerHero');
-    hero.classList.remove('running');
-    document.getElementById('timerDisplay').classList.remove('running');
-    document.getElementById('timerDisplay').textContent = '00:00:00';
-    document.getElementById('dockDot').classList.remove('show');
-    document.getElementById('timerStatusLabel').textContent = 'READY';
-    document.getElementById('timerStatusLabel').classList.remove('live');
-    document.getElementById('timerSub').textContent = 'Enter your topic above and launch a session to start tracking';
-    const btn = document.getElementById('timerToggle');
-    btn.textContent = '▶ Start Session';
-    btn.className = 'timer-btn-start';
-    
-    const hrs = Math.round((elapsedMs/3600000)*100)/100;
-    if(hrs < (1/60)) {
-      state.sessionHistory.shift();
-      saveProfile();
-      render();
-      syncGroupSelf();
-      return; 
-    }
-    pendingTimerHours = hrs;
-    
-    document.getElementById('logTimeBadge').textContent = fmtClock(elapsedMs);
-    document.getElementById('logNoteInput').value = '';
-    openModal('logModal');
-    syncGroupSelf();
-  }
-
-  // ---------- modals ----------
+  /* ── MODALS ─────────────────────────────────────────────────────────────── */
   function openModal(id){ document.getElementById(id).classList.add('show'); }
   function closeModal(id){ document.getElementById(id).classList.remove('show'); }
 
-  // ---------- backup actions ----------
+  /* ── BACKUP ─────────────────────────────────────────────────────────────── */
   function exportBackup(){
-    const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
+    const blob = new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
     a.download = 'studygrid-backup-'+localDateKey()+'.json';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
-    showToast('Backup exported', 'Save this file to keep your progress history safe');
+    showToast('Backup exported','Save this file for an extra copy of your progress.');
   }
   function importBackup(file){
     const reader = new FileReader();
     reader.onload = async (e)=>{
       try{
         const data = JSON.parse(e.target.result);
-        if(typeof data.totalHours !== 'number') throw new Error('invalid file');
+        if(typeof data.totalHours!=='number') throw new Error('invalid');
         state = Object.assign(state, data);
         await saveProfile();
-        showToast('Backup restored', 'Your historical tracking profile has been reloaded');
+        showToast('Backup restored','Historical tracking profile reloaded.');
         render();
         if(state.groupCode){ await syncGroupSelf(); startGroupPolling(); }
-      }catch(err){
-        alert('Invalid file format parsing STUDYGRID data profiles.');
-      }
+      }catch(err){ alert('Invalid backup file.'); }
     };
     reader.readAsText(file);
   }
 
-  // ---------- setup bindings ----------
-  function wireEvents(){
-    // ---------- sidebar nav + mobile toggle ----------
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('sidebarOverlay');
-    function openSidebar(){ sidebar.classList.add('open'); overlay.classList.add('show'); }
-    function closeSidebar(){ sidebar.classList.remove('open'); overlay.classList.remove('show'); }
-    document.getElementById('sidebarToggle').onclick = ()=>{
-      sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
-    };
-    overlay.onclick = closeSidebar;
-
-    document.querySelectorAll('.sidebar-nav .nav-item[data-target]').forEach(item=>{
-      item.onclick = ()=>{
-        document.querySelectorAll('.sidebar-nav .nav-item[data-target]').forEach(n=>n.classList.remove('active'));
-        item.classList.add('active');
-        const target = document.getElementById(item.dataset.target);
-        if(target) target.scrollIntoView({ behavior:'smooth', block:'start' });
-        closeSidebar();
-      };
+  /* ── LEVELS MODAL ───────────────────────────────────────────────────────── */
+  function populateLevelsModal(){
+    const list = document.getElementById('levelsModalList');
+    list.innerHTML='';
+    LEVEL_TITLES.forEach(t=>{
+      const xp  = getCumulativeXpForLevel(t.min);
+      const div = document.createElement('div');
+      div.className='resource-row';
+      div.style.alignItems='center';
+      div.innerHTML=`
+        <div class="level-ring" style="width:36px;height:36px;min-width:36px;border-width:2px;">
+          <span class="num mono" style="font-size:13px;">${t.min}</span>
+        </div>
+        <div class="resource-info" style="margin-left:10px;">
+          <div class="resource-title" style="font-size:13px;">${escapeHtml(t.title)}</div>
+          <div class="resource-meta">Levels ${t.min}${t.max!==t.min?' – '+t.max:''}</div>
+        </div>
+        <div class="r-hours mono" style="text-align:right;width:auto;min-width:80px;">
+          <div style="color:var(--violet);font-weight:600;font-size:12px;">${xp.toLocaleString()} XP</div>
+          <div style="font-size:10px;color:var(--muted-dim);">${(xp/XP_PER_HOUR).toLocaleString()} HR</div>
+        </div>
+      `;
+      list.appendChild(div);
     });
+  }
 
-    document.getElementById('chatInput').onkeydown = (e) => {
-      if (e.key === 'Enter') sendChatMessage();
-    };
-    document.getElementById('sendChatBtn').onclick = sendChatMessage;
+  /* ── GROUP POLLING ──────────────────────────────────────────────────────── */
+  function startGroupPolling(){
+    stopGroupPolling();
+    if(!state.groupCode) return;
+    renderRoom();
+    groupPollHandle = setInterval(renderRoom, 10000);
+    if(window.subscribeGroupRealtime) window.subscribeGroupRealtime(state.groupCode, renderRoom);
+    startHeartbeat();
+  }
+  function stopGroupPolling(){
+    if(groupPollHandle){ clearInterval(groupPollHandle); groupPollHandle=null; }
+    if(window.unsubscribeGroupRealtime) window.unsubscribeGroupRealtime();
+    stopHeartbeat();
+  }
 
-    // ADDED: Levels Modal button listeners
-    document.getElementById('openLevelsModalBtn').onclick = () => {
-      populateLevelsModal();
-      openModal('levelsModal');
-    };
-    document.getElementById('levelsCloseBtn').onclick = () => closeModal('levelsModal');
+  /* ── WIRE EVENTS ────────────────────────────────────────────────────────── */
+  function wireEvents(){
+    /* timer buttons */
+    document.getElementById('timerStart').onclick        = startTimer;
+    document.getElementById('timerPause').onclick        = pauseTimer;
+    document.getElementById('timerStop').onclick         = stopTimerAndLog;
+    document.getElementById('timerResume').onclick       = resumeTimer;
+    document.getElementById('timerStopFromPause').onclick= stopTimerAndLog;
 
-    document.getElementById('settingsBtn').onclick = () => {
-      document.getElementById('settingsName').value = state.name;
-      document.getElementById('settingsGoal').value = state.dailyGoalHours;
-      openModal('settingsModal');
-    };
-    document.getElementById('settingsCancel').onclick = ()=>closeModal('settingsModal');
-    document.getElementById('settingsSave').onclick = async ()=>{
-      const goal = parseFloat(document.getElementById('settingsGoal').value);
-      if(goal>0) state.dailyGoalHours = goal;
-      await saveProfile();
-      render();
-      if(state.groupCode) syncGroupSelf();
-      closeModal('settingsModal');
-    };
-    document.getElementById('exportBtn').onclick = exportBackup;
-    document.getElementById('importBtn').onclick = ()=> document.getElementById('importFile').click();
-    document.getElementById('importFile').onchange = (e)=>{
-      if(e.target.files && e.target.files[0]) importBackup(e.target.files[0]);
-      e.target.value = '';
-    };
-    document.getElementById('resetDataBtn').onclick = async ()=>{
-      if(!confirm('Clear tracking metrics completely?')) return;
-      try{ await window.storage.delete(STORAGE_KEY, false); }catch(e){}
-      location.reload();
-    };
-
-    document.getElementById('logCancel').onclick = ()=>{ 
-      pendingTimerHours=null; 
-      state.sessionHistory.shift(); 
-      saveProfile();
-      render();
-      syncGroupSelf();
-      closeModal('logModal'); 
+    /* log modal */
+    document.getElementById('logCancel').onclick = ()=>{
+      pendingTimerHours = null;
+      state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
+      saveProfile(); render(); closeModal('logModal');
     };
     document.getElementById('logSubmit').onclick = async ()=>{
-      const hrs = pendingTimerHours;
-      let extraNotes = document.getElementById('logNoteInput').value.trim();
-      if(!hrs || hrs<=0) return;
+      const hrs       = pendingTimerHours;
+      const extraNote = document.getElementById('logNoteInput').value.trim();
+      if(!hrs||hrs<=0) return;
       closeModal('logModal');
       pendingTimerHours = null;
-
-      // Flatten tracking profile elements out of temporary live states
-      if(state.sessionHistory[0] && state.sessionHistory[0].isLive) {
-        const structuralTopic = state.sessionHistory[0].note;
-        state.sessionHistory[0] = {
-          ts: Date.now(),
+      const liveIdx = state.sessionHistory.findIndex(s=>s.isLive);
+      if(liveIdx!==-1){
+        const topic = state.sessionHistory[liveIdx].note;
+        state.sessionHistory[liveIdx] = {
+          ts   : Date.now(),
           hours: hrs,
-          note: structuralTopic + (extraNotes ? ' — ' + extraNotes : '')
+          note : topic+(extraNote?' — '+extraNote:''),
         };
       }
       await addStudyHoursRecord(hrs);
     };
 
-    document.getElementById('timerToggle').onclick = ()=>{
-      if(timer.running) stopTimerAndPromptLog();
-      else startTimer();
+    /* settings */
+    document.getElementById('settingsBtn').onclick = ()=>{
+      document.getElementById('settingsName').value = state.name;
+      document.getElementById('settingsGoal').value = state.dailyGoalHours;
+      openModal('settingsModal');
+    };
+    document.getElementById('settingsCancel').onclick = ()=>closeModal('settingsModal');
+    document.getElementById('settingsSave').onclick   = async ()=>{
+      const goal = parseFloat(document.getElementById('settingsGoal').value);
+      if(goal>0) state.dailyGoalHours = goal;
+      await saveProfile(); render();
+      if(state.groupCode) syncGroupSelf();
+      closeModal('settingsModal');
+    };
+    document.getElementById('exportBtn').onclick = exportBackup;
+    document.getElementById('importBtn').onclick = ()=>document.getElementById('importFile').click();
+    document.getElementById('importFile').onchange = (e)=>{
+      if(e.target.files&&e.target.files[0]) importBackup(e.target.files[0]);
+      e.target.value='';
+    };
+    document.getElementById('resetDataBtn').onclick = async ()=>{
+      if(!confirm('Clear all tracking data?')) return;
+      try{ await window.storage.delete(STORAGE_KEY,false); }catch(e){}
+      if(state.id) try{ await window.storage.delete(timerCloudKey(),true); }catch(e){}
+      location.reload();
     };
 
-    document.getElementById('openGroupModalBtn').onclick = ()=>openModal('groupModal');
-    document.getElementById('groupCancel').onclick = ()=>closeModal('groupModal');
-    document.getElementById('leaveGroupBtn').onclick = async ()=>{
-      if(!confirm('Leave this room? Your progress will no longer be visible here.')) return;
-      state.groupCode = null; state.groupName = null;
-      await saveProfile();
-      stopGroupPolling();
-      render();
-    };
+    /* chat */
+    document.getElementById('sendChatBtn').onclick = sendChatMessage;
+    document.getElementById('chatInput').onkeydown = (e)=>{ if(e.key==='Enter') sendChatMessage(); };
 
+    /* levels */
+    document.getElementById('openLevelsModalBtn').onclick = ()=>{ populateLevelsModal(); openModal('levelsModal'); };
+    document.getElementById('levelsCloseBtn').onclick     = ()=>closeModal('levelsModal');
+
+    /* group room tabs */
     document.querySelectorAll('#groupModal .tab').forEach(tab=>{
       tab.onclick = ()=>{
         document.querySelectorAll('#groupModal .tab').forEach(t=>t.classList.remove('active'));
         tab.classList.add('active');
-        document.getElementById('joinPane').style.display = tab.dataset.tab==='join' ? 'block':'none';
-        document.getElementById('createPane').style.display = tab.dataset.tab==='create' ? 'block':'none';
+        document.getElementById('joinPane').style.display   = tab.dataset.tab==='join'  ?'block':'none';
+        document.getElementById('createPane').style.display = tab.dataset.tab==='create'?'block':'none';
       };
     });
 
+    document.getElementById('openGroupModalBtn').onclick = ()=>openModal('groupModal');
+    document.getElementById('groupCancel').onclick       = ()=>closeModal('groupModal');
+    document.getElementById('leaveGroupBtn').onclick     = async ()=>{
+      if(!confirm('Leave this room?')) return;
+      state.groupCode=null; state.groupName=null;
+      await saveProfile(); stopGroupPolling(); render();
+    };
     document.getElementById('groupSubmit').onclick = async ()=>{
       const activeTab = document.querySelector('#groupModal .tab.active').dataset.tab;
       if(activeTab==='join'){
         const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
         if(!code) return;
-        state.groupCode = code;
-        state.groupName = null;
-        await saveProfile();
-        await syncGroupSelf();
+        state.groupCode=code; state.groupName=null;
+        await saveProfile(); await syncGroupSelf();
         const g = await fetchGroup();
-        if(g && g.name) { state.groupName = g.name; await saveProfile(); }
+        if(g&&g.name){ state.groupName=g.name; await saveProfile(); }
       } else {
-        const name = document.getElementById('createNameInput').value.trim() || 'My Room';
+        const name = document.getElementById('createNameInput').value.trim()||'My Room';
         const code = uid(4);
-        state.groupCode = code;
-        state.groupName = name;
-        await saveProfile();
-        await syncGroupSelf();
-        showToast('Room created', 'Share code '+code+' with your study group');
+        state.groupCode=code; state.groupName=name;
+        await saveProfile(); await syncGroupSelf();
+        showToast('Room created','Share code '+code+' with your study group');
       }
-      closeModal('groupModal');
-      render();
-      startGroupPolling();
+      closeModal('groupModal'); render(); startGroupPolling();
     };
 
-    document.getElementById('addResourceBtn').onclick = ()=>{
-      document.getElementById('resourceTitleInput').value = '';
-      document.getElementById('resourceUrlInput').value = '';
-      openModal('resourceModal');
-    };
-    document.getElementById('resourceCancel').onclick = ()=>closeModal('resourceModal');
-    document.getElementById('resourceSubmit').onclick = async ()=>{
+    document.getElementById('addResourceBtn').onclick  = ()=>{ document.getElementById('resourceTitleInput').value=''; document.getElementById('resourceUrlInput').value=''; openModal('resourceModal'); };
+    document.getElementById('resourceCancel').onclick  = ()=>closeModal('resourceModal');
+    document.getElementById('resourceSubmit').onclick  = async ()=>{
       const title = document.getElementById('resourceTitleInput').value.trim();
-      const url = document.getElementById('resourceUrlInput').value.trim();
-      if(!title || !url || !/^https?:\/\//i.test(url)){
-        alert('Please enter a valid URL starting with http:// or https://');
-        return;
-      }
+      const url   = document.getElementById('resourceUrlInput').value.trim();
+      if(!title||!url||!/^https?:\/\//i.test(url)){ alert('Enter a valid URL starting with http:// or https://'); return; }
       closeModal('resourceModal');
       await addResourceToGroup(title, url);
-      showToast('Resource shared', 'Your link has been added to the room');
+      showToast('Resource shared','Link added to the room');
       renderRoom();
     };
   }
 
-  // Fast internal ticking loops to drive background status checks safely
-  function startGroupPolling(){
-    stopGroupPolling();
-    if(!state.groupCode) return;
-    renderRoom();
-    groupPollHandle = setInterval(async () => {
-      await syncGroupSelf();
-      await renderRoom();
-    }, 5000); 
-    if(window.subscribeGroupRealtime) window.subscribeGroupRealtime(state.groupCode, renderRoom);
-  }
-  function stopGroupPolling(){
-    if(groupPollHandle) clearInterval(groupPollHandle);
-    groupPollHandle = null;
-    if(window.unsubscribeGroupRealtime) window.unsubscribeGroupRealtime();
-  }
-
-  // ---------- onboarding sync orchestration ----------
+  /* ── ONBOARDING ─────────────────────────────────────────────────────────── */
   async function maybeOnboard(){
-    if(state.id && state.name){
-      render();
-      if(state.groupCode) startGroupPolling();
-      return;
+    if(state.id&&state.name){
+      render(); if(state.groupCode) startGroupPolling(); return;
     }
     openModal('onboardModal');
     document.getElementById('onboardSubmit').onclick = async ()=>{
-      const name = document.getElementById('onboardName').value.trim();
+      const name     = document.getElementById('onboardName').value.trim();
       const password = document.getElementById('onboardPassword').value;
-      const goal = parseFloat(document.getElementById('onboardGoal').value) || 4;
-      if(!name) { alert('Please enter a username.'); return; }
-      if(!password) { alert('Please enter a password.'); return; }
+      const goal     = parseFloat(document.getElementById('onboardGoal').value)||4;
+      if(!name)    { alert('Please enter a username.'); return; }
+      if(!password){ alert('Please enter a password.'); return; }
 
-      // Global identity scanning via lowercased username values
-      const cloudProfileKey = 'user-profile:' + name.toLowerCase();
-      const cloudCheck = await window.storage.get(cloudProfileKey, true);
-      
-      if (cloudCheck && cloudCheck.value) {
-        const cloudData = JSON.parse(cloudCheck.value);
-        // Verify credentials match
-        if (cloudData.password && cloudData.password !== password) {
-          alert('Incorrect password for this profile username. Please try again.');
-          return;
-        }
-        state = Object.assign(state, cloudData);
-        showToast('Cloud Profile Synced', `Welcome back, ${state.name}!`);
+      const cloudKey  = 'user-profile:'+name.toLowerCase();
+      const cloudData = await window.storage.get(cloudKey, true);
+      if(cloudData&&cloudData.value){
+        const saved = JSON.parse(cloudData.value);
+        if(saved.password&&saved.password!==password){ alert('Incorrect password. Please try again.'); return; }
+        state = Object.assign(state, saved);
+        showToast('Cloud profile loaded','Welcome back, '+state.name+'!');
       } else {
-        state.id = uid(8);
-        state.name = name;
-        state.password = password;
+        state.id             = uid(8);
+        state.name           = name;
+        state.password       = password;
         state.dailyGoalHours = goal;
       }
-      
       await saveProfile();
       closeModal('onboardModal');
       render();
@@ -1606,25 +1523,34 @@ const LEVEL_TITLES = [
     };
   }
 
-  // ---------- initialization loop initialization ----------
+  /* ── BOOT ───────────────────────────────────────────────────────────────── */
   async function boot(){
     wireEvents();
     await loadProfile();
     await maybeOnboard();
-    
-    // Core Engine Tick Setup
-    setInterval(() => {
+
+    // ── Restore any timer that was running/paused before page closed ──────
+    const hadTimer = await loadPersistedTimer();
+    if(hadTimer){
+      restoreTimerUI();
+    } else {
+      applyTimerUI();
+    }
+
+    // ── 1-second loop: countdown + extrapolated friend timers in roster ───
+    setInterval(()=>{
       renderCountdown();
-      if (timer.running) {
-        renderStudyLog();
-      }
-      if (state.groupCode && cachedGroupData) {
+      // Re-render the roster every second so friend clocks tick smoothly
+      // (we extrapolate from their timerRecord.started_at, no Supabase call)
+      if(state.groupCode && cachedGroupData){
         runRosterDOMEngine(cachedGroupData);
       }
     }, 1000);
 
+    // Full render refresh every minute
     setInterval(render, 60000);
   }
+
   boot();
 })();
 </script>
