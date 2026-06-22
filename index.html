@@ -847,8 +847,12 @@
     const elapsedMs = getElapsedMs();
     stopTick();
 
-    // Erase the cloud record — session is over
-    timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
+    // Freeze the record at "paused" — don't wipe it from the cloud yet.
+    // We clear it only after the user confirms save or discard in the log modal.
+    // This keeps the member visible in the roster until they explicitly finish.
+    timerRecord.accumulated_seconds = Math.floor(elapsedMs/1000);
+    timerRecord.started_at          = null;
+    timerRecord.status              = 'paused';
     persistTimer();
 
     const topicEl = document.getElementById('preSessionTopic');
@@ -859,7 +863,9 @@
 
     const hrs = Math.round((elapsedMs/3600000)*100)/100;
     if(hrs < (30/3600)){
-      // < 30 seconds: silently discard
+      // < 30 seconds: silently discard — now safe to clear cloud record
+      timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
+      persistTimer();
       state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
       saveProfile();
       render();
@@ -1209,22 +1215,29 @@
       const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
       const mPct      = clamp((m.totalHours/GOAL_TOTAL)*100,0,100);
 
-      /* Online/offline: based on heartbeat age (lastActive) */
-      const msSince = m.lastActive ? Date.now()-m.lastActive : 99999999;
-      const isOnline = msSince <= 60000;   // green if heartbeat < 60 s old
-
       /* Live timer extrapolated from the persisted timerRecord */
       const tr = m.timerRecord || {};
-      let dotClass  = isOnline ? 'online' : '';  // '' = grey (offline)
+
+      /* Online/offline logic:
+       * - If timer is ACTIVE or PAUSED → always show as online/active,
+       *   regardless of whether the browser is open (timer persists in Supabase).
+       * - Only show as offline when timer is idle AND heartbeat is stale (> 60 s).
+       */
+      const msSince  = m.lastActive ? Date.now()-m.lastActive : 99999999;
+      const heartbeatAlive = msSince <= 60000;
+      const timerRunning   = tr.status === 'active' || tr.status === 'paused';
+      const isOnline = heartbeatAlive || timerRunning;
+
+      let dotClass    = isOnline ? 'online' : '';   // '' = grey (offline)
       let runtimeHtml = '';
 
-      if(isOnline && tr.status==='active' && tr.started_at){
+      if(tr.status==='active' && tr.started_at){
         const accMs   = (tr.accumulated_seconds||0)*1000;
         const segMs   = Date.now()-new Date(tr.started_at).getTime();
         const totalMs = Math.max(0, accMs+segMs);
         dotClass    = 'online';
         runtimeHtml = `<span style="color:var(--teal);font-weight:600;">▶ ${escapeHtml(tr.topic||'Studying')} &nbsp;${fmtClock(totalMs)}</span>`;
-      } else if(isOnline && tr.status==='paused'){
+      } else if(tr.status==='paused'){
         dotClass    = 'paused-dot';
         const accMs = (tr.accumulated_seconds||0)*1000;
         runtimeHtml = `<span style="color:var(--amber);">⏸ Paused &nbsp;${escapeHtml(tr.topic||'')} &nbsp;(${fmtClock(accMs)} banked)</span>`;
@@ -1453,8 +1466,12 @@
     /* log modal */
     document.getElementById('logCancel').onclick = ()=>{
       pendingTimerHours = null;
+      // User discarded — now clear the cloud timer record
+      timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
+      persistTimer();
       state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
       saveProfile(); render(); closeModal('logModal');
+      if(state.groupCode) syncGroupSelf();
     };
     document.getElementById('logSubmit').onclick = async ()=>{
       const hrs       = pendingTimerHours;
@@ -1462,6 +1479,9 @@
       if(!hrs||hrs<=0) return;
       closeModal('logModal');
       pendingTimerHours = null;
+      // Session is now saved — clear the cloud timer record
+      timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
+      persistTimer();
       const liveIdx = state.sessionHistory.findIndex(s=>s.isLive);
       if(liveIdx!==-1){
         const topic = state.sessionHistory[liveIdx].note;
