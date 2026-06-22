@@ -73,7 +73,7 @@
 
   /* hero */
   .hero{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:28px 28px 24px;overflow:hidden;margin-bottom:18px;}
-  .hero::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--teal-glow),transparent);}
+  .hero::before{content:'public';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--teal-glow),transparent);}
   .hero-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-bottom:18px;}
   .eyebrow{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);font-weight:600;display:flex;align-items:center;gap:6px;}
   .eyebrow::before{content:'';width:6px;height:6px;background:var(--teal);border-radius:50%;box-shadow:0 0 6px var(--teal-glow);}
@@ -344,7 +344,6 @@
     </div>
   </div>
 
-  <!-- ── TIMESTAMP-BASED TIMER ── -->
   <div class="timer-hero" id="timerHero">
     <div class="timer-hero-inner">
       <div class="timer-eyebrow">
@@ -356,10 +355,8 @@
         <div class="timer-clock mono" id="timerDisplay">00:00:00</div>
       </div>
 
-      <!-- restore notice shown when a running/paused session is recovered on page load -->
       <div class="restore-banner" id="timerRestoreBanner"></div>
 
-      <!-- topic input — hidden while session is active/paused -->
       <div id="preSessionTopicField" style="width:100%;max-width:320px;">
         <input type="text" id="preSessionTopic" placeholder="What are you going to study?">
       </div>
@@ -367,12 +364,9 @@
       <div class="timer-sub" id="timerSub">Enter your topic above and start a session</div>
 
       <div class="timer-actions">
-        <!-- IDLE -->
         <button class="timer-btn-start" id="timerStart">▶ Start Session</button>
-        <!-- ACTIVE -->
         <button class="timer-btn-pause" id="timerPause"  style="display:none;">⏸ Pause</button>
         <button class="timer-btn-stop"  id="timerStop"   style="display:none;">⏹ Stop &amp; Save</button>
-        <!-- PAUSED -->
         <button class="timer-btn-start" id="timerResume"        style="display:none;">▶ Resume</button>
         <button class="timer-btn-stop"  id="timerStopFromPause" style="display:none;">⏹ Stop &amp; Save</button>
       </div>
@@ -416,7 +410,6 @@
     </div>
   </div>
 
-  <!-- ROOM -->
   <div class="card room-card" id="roomSection">
     <div class="card-head">
       <div>
@@ -462,7 +455,6 @@
     <button class="btn btn-ghost btn-sm" id="leaveGroupBtn" style="display:none;margin-top:14px;width:fit-content;">Leave room</button>
   </div>
 
-  <!-- STUDY LOG -->
   <div class="card" id="studyLogSection">
     <div class="card-head">
       <div>
@@ -473,12 +465,7 @@
     <div id="studyLogList"><div class="studylog-empty">No sessions logged yet.</div></div>
   </div>
 
-</div><!-- /app -->
-  </div><!-- /main -->
-</div><!-- /layout -->
-
-<!-- ONBOARDING -->
-<div class="modal-bg" id="onboardModal">
+</div></div></div><div class="modal-bg" id="onboardModal">
   <div class="modal">
     <div class="modal-title">Welcome to STUDYGRID</div>
     <div class="modal-desc">Enter your username and password. Existing cloud profiles will load automatically.</div>
@@ -498,7 +485,6 @@
   </div>
 </div>
 
-<!-- SETTINGS -->
 <div class="modal-bg" id="settingsModal">
   <div class="modal">
     <div class="modal-title">Settings</div>
@@ -527,7 +513,6 @@
   </div>
 </div>
 
-<!-- SESSION LOG MODAL -->
 <div class="modal-bg" id="logModal">
   <div class="modal">
     <div class="modal-title" id="logModalTitle">Save your session</div>
@@ -544,7 +529,6 @@
   </div>
 </div>
 
-<!-- GROUP MODAL -->
 <div class="modal-bg" id="groupModal">
   <div class="modal">
     <div class="modal-title">Set up a room</div>
@@ -573,7 +557,6 @@
   </div>
 </div>
 
-<!-- ADD RESOURCE MODAL -->
 <div class="modal-bg" id="resourceModal">
   <div class="modal">
     <div class="modal-title">Share a resource</div>
@@ -593,7 +576,6 @@
   </div>
 </div>
 
-<!-- LEVELS MODAL -->
 <div class="modal-bg" id="levelsModal">
   <div class="modal" style="max-width:500px;">
     <div class="modal-title">Rank Progression</div>
@@ -610,9 +592,6 @@
   <div id="toastBody"></div>
 </div>
 
-<!-- ════════════════════════════════════════════════════════════════════════════
-     SUPABASE CLIENT + STORAGE BRIDGE
-     ════════════════════════════════════════════════════════════════════════════ -->
 <script>
   const SUPABASE_URL     = 'https://shasdgmyagrxkdslnuiu.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_ggdJG-tKTwanwiS-OENB5Q_ymbzkFT2';
@@ -668,7 +647,13 @@
     if(groupRealtimeChannel){ sb.removeChannel(groupRealtimeChannel); groupRealtimeChannel = null; }
     if(!groupCode) return;
     groupRealtimeChannel = sb.channel('room-'+groupCode)
-      .on('postgres_changes', { event:'*', schema:'public', table:'studygrid_kv', filter:'key=eq.group:'+groupCode }, onChange)
+      .on('postgres_changes', { event:'*', schema:'public', table:'studygrid_kv', filter:'key=eq.group:'+groupCode }, (payload) => {
+         if (payload.new && payload.new.value) {
+             onChange(payload.new.value);
+         } else {
+             onChange();
+         }
+      })
       .subscribe();
   };
   window.unsubscribeGroupRealtime = function(){
@@ -676,9 +661,6 @@
   };
 </script>
 
-<!-- ════════════════════════════════════════════════════════════════════════════
-     APP LOGIC
-     ════════════════════════════════════════════════════════════════════════════ -->
 <script>
 (function(){
   /* ── constants ──────────────────────────────────────────────────────────── */
@@ -719,11 +701,11 @@
    * `timer:<userId>` so elapsed time survives a browser close.
    *
    * Shape:
-   *   status              : 'idle' | 'active' | 'paused'
-   *   started_at          : ISO-8601 string set when status becomes 'active',
-   *                         null otherwise
-   *   accumulated_seconds : seconds logged in earlier segments (pauses, resumes)
-   *   topic               : what the user typed before starting
+   * status              : 'idle' | 'active' | 'paused'
+   * started_at          : ISO-8601 string set when status becomes 'active',
+   * null otherwise
+   * accumulated_seconds : seconds logged in earlier segments (pauses, resumes)
+   * topic               : what the user typed before starting
    *
    * getElapsedMs() always recomputes from these fields so no local counter
    * ever drifts or loses data when the tab is hidden / closed.
@@ -731,8 +713,7 @@
   let timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
 
   let tickHandle      = null; // 1-second DOM refresh – does NOT drive elapsed
-  let heartbeatHandle = null; // pushes lastActive to room every 8 s
-  let groupPollHandle = null;
+  let heartbeatHandle = null; // pushes lastActive to room every 60 s
   let cachedGroupData = null;
   let pendingTimerHours = null;
 
@@ -1031,14 +1012,14 @@
   }
 
   /* ── HEARTBEAT  –  drives online/offline dots in the room roster
-     Pushes `lastActive` every 8 s independently of the timer. When the tab
-     closes the heartbeats stop → member goes offline after 60 s.
+     Pushes `lastActive` every 60 s independently of the timer. When the tab
+     closes the heartbeats stop → member goes offline after 90 s.
      ══════════════════════════════════════════════════════════════════════════ */
   function startHeartbeat(){
     stopHeartbeat();
     if(!state.groupCode) return;
     syncGroupSelf();                            // immediate push
-    heartbeatHandle = setInterval(syncGroupSelf, 8000);
+    heartbeatHandle = setInterval(syncGroupSelf, 60000);
   }
   function stopHeartbeat(){
     if(heartbeatHandle){ clearInterval(heartbeatHandle); heartbeatHandle=null; }
@@ -1280,11 +1261,11 @@
 
       /* Online/offline logic:
        * - If timer is ACTIVE or PAUSED → always show as online/active,
-       *   regardless of whether the browser is open (timer persists in Supabase).
-       * - Only show as offline when timer is idle AND heartbeat is stale (> 60 s).
+       * regardless of whether the browser is open (timer persists in Supabase).
+       * - Only show as offline when timer is idle AND heartbeat is stale (> 90 s).
        */
       const msSince  = m.lastActive ? Date.now()-m.lastActive : 99999999;
-      const heartbeatAlive = msSince <= 60000;
+      const heartbeatAlive = msSince <= 90000;
       const timerRunning   = tr.status === 'active' || tr.status === 'paused';
       const isOnline = heartbeatAlive || timerRunning;
 
@@ -1322,9 +1303,16 @@
     });
   }
 
-  async function renderRoom(){
+  async function renderRoom(realtimeData){
     if(!state.groupCode) return;
-    const group = await fetchGroup();
+    
+    let group;
+    if (realtimeData && typeof realtimeData === 'object' && realtimeData.members) {
+      group = realtimeData;
+    } else {
+      group = await fetchGroup();
+    }
+    
     cachedGroupData = group;
     const resList = document.getElementById('resourcesList');
 
@@ -1525,12 +1513,10 @@
     stopGroupPolling();
     if(!state.groupCode) return;
     renderRoom();
-    groupPollHandle = setInterval(renderRoom, 10000);
     if(window.subscribeGroupRealtime) window.subscribeGroupRealtime(state.groupCode, renderRoom);
     startHeartbeat();
   }
   function stopGroupPolling(){
-    if(groupPollHandle){ clearInterval(groupPollHandle); groupPollHandle=null; }
     if(window.unsubscribeGroupRealtime) window.unsubscribeGroupRealtime();
     stopHeartbeat();
   }
