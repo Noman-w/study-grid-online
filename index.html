@@ -1016,10 +1016,10 @@
      closes the heartbeats stop → member goes offline after 90 s.
      ══════════════════════════════════════════════════════════════════════════ */
   function startHeartbeat(){
-    stopHeartbeat();
-    if(!state.groupCode) return;
-    syncGroupSelf();                            // immediate push
-    heartbeatHandle = setInterval(syncGroupSelf, 60000);
+    //stopHeartbeat();
+    //if(!state.groupCode) return;
+    //syncGroupSelf();                            // immediate push
+    //heartbeatHandle = setInterval(syncGroupSelf, 60000);
   }
   function stopHeartbeat(){
     if(heartbeatHandle){ clearInterval(heartbeatHandle); heartbeatHandle=null; }
