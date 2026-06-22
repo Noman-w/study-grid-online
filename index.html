@@ -26,21 +26,50 @@
   .display{font-family:'Space Grotesk',sans-serif;}
   .app{max-width:1180px;margin:0 auto;padding:20px 20px 100px;}
 
-  /* topbar */
-  .topbar{display:flex;align-items:center;justify-content:space-between;padding:6px 4px 22px;}
-  .brand{display:flex;align-items:center;gap:10px;}
+  /* ---------- sidebar ---------- */
+  .layout{display:flex;min-height:100vh;align-items:stretch;}
+  .sidebar{
+    width:236px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;gap:18px;padding:22px 14px;
+    position:sticky;top:0;height:100vh;z-index:60;overflow-y:auto;
+  }
+  .sidebar-brand{display:flex;align-items:center;gap:10px;padding:0 8px 16px;border-bottom:1px solid var(--line-soft);}
   .brand-mark{width:30px;height:30px;border:1.5px solid var(--teal);border-radius:6px;display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;}
   .brand-mark::before{content:'';width:8px;height:8px;background:var(--teal);border-radius:1px;box-shadow:0 0 8px var(--teal-glow);}
   .brand-text{display:flex;flex-direction:column;line-height:1.1;}
   .brand-text .name{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16px;letter-spacing:.5px;}
-  .brand-text .tag{font-size:10px;color:var(--muted-dim);letter-spacing:1.5px;text-transform:uppercase;}
-  .top-right{display:flex;align-items:center;gap:10px;}
-  .profile-pill{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px 6px 6px;cursor:default;}
-  .profile-pill .avatar{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--violet),var(--teal));display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#0a0d10;}
-  .profile-pill .pname{font-size:13px;font-weight:600;}
+  .brand-text .tag{font-size:9.5px;color:var(--muted-dim);letter-spacing:1.3px;text-transform:uppercase;}
+  .sidebar-nav{display:flex;flex-direction:column;gap:3px;}
+  .nav-item{
+    display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:var(--radius-sm);
+    color:var(--muted);text-decoration:none;font-size:13px;font-weight:600;cursor:pointer;
+    border:1px solid transparent;transition:.15s;font-family:'Inter',sans-serif;background:transparent;width:100%;text-align:left;
+  }
+  .nav-item:hover{background:var(--panel-2);color:var(--text);}
+  .nav-item.active{background:var(--panel-2);color:var(--teal);border-color:var(--line);}
+  .nav-ic{font-size:13px;width:16px;text-align:center;flex-shrink:0;}
+  .sidebar-divider{height:1px;background:var(--line-soft);margin:2px 4px;}
+  .sidebar-spacer{flex:1;}
+  .profile-pill{display:flex;align-items:center;gap:8px;background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:6px 12px 6px 6px;cursor:default;}
+  .profile-pill .avatar{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--violet),var(--teal));display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#0a0d10;flex-shrink:0;}
+  .profile-pill .pname{font-size:12.5px;font-weight:600;line-height:1.3;}
   .profile-pill .plevel{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;}
   .icon-btn{width:34px;height:34px;border-radius:var(--radius-sm);border:1px solid var(--line);background:var(--panel);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s;}
   .icon-btn:hover{color:var(--text);border-color:var(--muted-dim);}
+  .main{flex:1;min-width:0;}
+  .sidebar-toggle{
+    display:none;position:fixed;top:14px;left:14px;z-index:70;width:38px;height:38px;
+    border-radius:var(--radius-sm);border:1px solid var(--line);background:var(--panel);color:var(--text);
+    font-size:16px;align-items:center;justify-content:center;cursor:pointer;
+  }
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(5,7,9,.6);z-index:55;}
+  @media(max-width:880px){
+    .sidebar{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform .25s ease;box-shadow:20px 0 50px rgba(0,0,0,.5);}
+    .sidebar.open{transform:translateX(0);}
+    .sidebar-toggle{display:flex;}
+    .sidebar-overlay.show{display:block;}
+    .main{padding-top:50px;}
+  }
 
   /* hero */
   .hero{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:28px 28px 24px;overflow:hidden;margin-bottom:18px;}
@@ -229,29 +258,47 @@
 </style>
 </head>
 <body>
-<div class="app" id="app">
+<button class="sidebar-toggle" id="sidebarToggle" title="Menu">☰</button>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-  <div class="topbar">
-    <div class="brand">
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
       <div class="brand-mark"></div>
       <div class="brand-text">
         <span class="name">STUDYGRID</span>
         <span class="tag">3000HR Mission Tracker</span>
       </div>
     </div>
-    <div class="top-right">
-      <div class="profile-pill" id="profilePill">
-        <div class="avatar" id="pillAvatar">—</div>
-        <div>
-          <div class="pname" id="pillName">—</div>
-          <div class="plevel" id="pillLevel">LV.1</div>
-        </div>
-      </div>
-      <div class="icon-btn" id="settingsBtn" title="Settings">⚙</div>
-    </div>
-  </div>
 
-  <div class="hero">
+    <nav class="sidebar-nav">
+      <a class="nav-item active" data-target="dashboardSection"><span class="nav-ic">◧</span> Dashboard</a>
+      <a class="nav-item" data-target="timerHero"><span class="nav-ic">⏱</span> Timer</a>
+      <a class="nav-item" data-target="roomSection"><span class="nav-ic">◎</span> Room</a>
+      <a class="nav-item" data-target="studyLogSection"><span class="nav-ic">▤</span> Study Log</a>
+    </nav>
+
+    <div class="sidebar-divider"></div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item" id="settingsBtn"><span class="nav-ic">⚙</span> Settings</button>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="profile-pill" id="profilePill">
+      <div class="avatar" id="pillAvatar">—</div>
+      <div>
+        <div class="pname" id="pillName">—</div>
+        <div class="plevel" id="pillLevel">LV.1</div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+<div class="app" id="app">
+
+  <div class="hero" id="dashboardSection">
     <div class="hero-top">
       <div>
         <div class="eyebrow">Mission · 3000 Hours</div>
@@ -353,7 +400,7 @@
   </div>
 
   <!-- ROOM -->
-  <div class="card room-card">
+  <div class="card room-card" id="roomSection">
     <div class="card-head">
       <div>
         <div class="card-title">Room</div>
@@ -399,7 +446,7 @@
   </div>
 
   <!-- STUDY LOG -->
-  <div class="card">
+  <div class="card" id="studyLogSection">
     <div class="card-head">
       <div>
         <div class="card-title">Study Log</div>
@@ -410,6 +457,8 @@
   </div>
 
 </div><!-- /app -->
+  </div><!-- /main -->
+</div><!-- /layout -->
 
 <!-- ONBOARDING -->
 <div class="modal-bg" id="onboardModal">
@@ -1375,6 +1424,25 @@
 
   /* ── WIRE EVENTS ────────────────────────────────────────────────────────── */
   function wireEvents(){
+    /* sidebar toggle + nav scroll */
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    function openSidebar(){ sidebar.classList.add('open'); overlay.classList.add('show'); }
+    function closeSidebar(){ sidebar.classList.remove('open'); overlay.classList.remove('show'); }
+    document.getElementById('sidebarToggle').onclick = ()=>{
+      sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+    };
+    overlay.onclick = closeSidebar;
+    document.querySelectorAll('.sidebar-nav .nav-item[data-target]').forEach(item=>{
+      item.onclick = ()=>{
+        document.querySelectorAll('.sidebar-nav .nav-item[data-target]').forEach(n=>n.classList.remove('active'));
+        item.classList.add('active');
+        const target = document.getElementById(item.dataset.target);
+        if(target) target.scrollIntoView({ behavior:'smooth', block:'start' });
+        closeSidebar();
+      };
+    });
+
     /* timer buttons */
     document.getElementById('timerStart').onclick        = startTimer;
     document.getElementById('timerPause').onclick        = pauseTimer;
