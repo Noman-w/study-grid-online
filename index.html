@@ -844,16 +844,26 @@
 
   /* ── STOP ───────────────────────────────────────────────────────────────── */
   async function stopTimerAndLog(){
-    const elapsedMs = getElapsedMs();
+    const elapsedMs    = getElapsedMs();
+    const stoppedTopic = timerRecord.topic;
     stopTick();
 
-    // Freeze the record at "paused" — don't wipe it from the cloud yet.
-    // We clear it only after the user confirms save or discard in the log modal.
-    // This keeps the member visible in the roster until they explicitly finish.
-    timerRecord.accumulated_seconds = Math.floor(elapsedMs/1000);
-    timerRecord.started_at          = null;
-    timerRecord.status              = 'paused';
-    persistTimer();
+    // Push a frozen "paused" snapshot to the cloud so the member stays visible
+    // in the room roster while the save modal is open (or if they close their
+    // browser before saving). The LOCAL timerRecord resets to idle immediately
+    // so applyTimerUI() shows the Start button + topic field correctly.
+    const cloudSnapshot = {
+      status              : 'paused',
+      started_at          : null,
+      accumulated_seconds : Math.floor(elapsedMs/1000),
+      topic               : stoppedTopic,
+    };
+    if(state.id && sb){
+      window.storage.set('timer:'+state.id, JSON.stringify(cloudSnapshot), true);
+    }
+
+    // Local record → idle (drives UI only)
+    timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
 
     const topicEl = document.getElementById('preSessionTopic');
     topicEl.disabled = false;
@@ -863,9 +873,10 @@
 
     const hrs = Math.round((elapsedMs/3600000)*100)/100;
     if(hrs < (30/3600)){
-      // < 30 seconds: silently discard — now safe to clear cloud record
-      timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
-      persistTimer();
+      // < 30 seconds: silently discard — clear the cloud record too
+      if(state.id && sb){
+        window.storage.set('timer:'+state.id, JSON.stringify(timerRecord), true);
+      }
       state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
       saveProfile();
       render();
@@ -876,7 +887,7 @@
     document.getElementById('logTimeBadge').textContent = fmtClock(elapsedMs);
     document.getElementById('logNoteInput').value = '';
     openModal('logModal');
-    syncGroupSelf();
+    if(state.groupCode) syncGroupSelf();
   }
 
   /* ── TICK (display only) ────────────────────────────────────────────────── */
