@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <link rel="icon" type="image/png" href="/monke.png">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>STUDYGRID</title>
@@ -43,21 +42,55 @@
   .display{ font-family:'Space Grotesk',sans-serif; }
   .app{ max-width:1180px; margin:0 auto; padding:20px 20px 100px; }
 
-  /* ---------- topbar ---------- */
-  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:6px 4px 22px; }
-  .brand{ display:flex; align-items:center; gap:10px; }
+  /* ---------- app shell / sidebar ---------- */
+  .layout{ display:flex; min-height:100vh; align-items:stretch; }
+  .sidebar{
+    width:236px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--line);
+    display:flex; flex-direction:column; gap:18px; padding:22px 14px;
+    position:sticky; top:0; height:100vh; z-index:60; overflow-y:auto;
+  }
+  .sidebar-brand{ display:flex; align-items:center; gap:10px; padding:0 8px 16px; border-bottom:1px solid var(--line-soft); }
   .brand-mark{ width:30px; height:30px; border:1.5px solid var(--teal); border-radius:6px; display:flex; align-items:center; justify-content:center; position:relative; flex-shrink:0;}
   .brand-mark::before{ content:''; width:8px; height:8px; background:var(--teal); border-radius:1px; box-shadow:0 0 8px var(--teal-glow);}
   .brand-text{ display:flex; flex-direction:column; line-height:1.1; }
   .brand-text .name{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:16px; letter-spacing:.5px; }
-  .brand-text .tag{ font-size:10px; color:var(--muted-dim); letter-spacing:1.5px; text-transform:uppercase; }
-  .top-right{ display:flex; align-items:center; gap:10px; }
-  .profile-pill{ display:flex; align-items:center; gap:8px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:6px 12px 6px 6px; cursor:default;}
-  .profile-pill .avatar{ width:24px; height:24px; border-radius:50%; background:linear-gradient(135deg,var(--violet),var(--teal)); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#0a0d10;}
-  .profile-pill .pname{ font-size:13px; font-weight:600; }
+  .brand-text .tag{ font-size:9.5px; color:var(--muted-dim); letter-spacing:1.3px; text-transform:uppercase; }
+
+  .sidebar-nav{ display:flex; flex-direction:column; gap:3px; }
+  .nav-item{
+    display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:var(--radius-sm);
+    color:var(--muted); text-decoration:none; font-size:13px; font-weight:600; cursor:pointer;
+    border:1px solid transparent; transition:.15s; font-family:'Inter',sans-serif; background:transparent; width:100%; text-align:left;
+  }
+  .nav-item:hover{ background:var(--panel-2); color:var(--text); }
+  .nav-item.active{ background:var(--panel-2); color:var(--teal); border-color:var(--line); }
+  .nav-ic{ font-size:13px; width:16px; text-align:center; flex-shrink:0; }
+  .sidebar-divider{ height:1px; background:var(--line-soft); margin:2px 4px; }
+  .sidebar-section-label{ font-size:9.5px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted-dim); padding:0 10px; margin-bottom:2px; }
+
+  .sidebar-spacer{ flex:1; }
+  .profile-pill{ display:flex; align-items:center; gap:8px; background:var(--panel-2); border:1px solid var(--line); border-radius:999px; padding:6px 12px 6px 6px; cursor:default;}
+  .profile-pill .avatar{ width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,var(--violet),var(--teal)); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#0a0d10; flex-shrink:0;}
+  .profile-pill .pname{ font-size:12.5px; font-weight:600; line-height:1.3; }
   .profile-pill .plevel{ font-size:10px; color:var(--muted); font-family:'JetBrains Mono',monospace;}
   .icon-btn{ width:34px; height:34px; border-radius:var(--radius-sm); border:1px solid var(--line); background:var(--panel); color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:.15s; }
   .icon-btn:hover{ color:var(--text); border-color:var(--muted-dim); }
+
+  .main{ flex:1; min-width:0; }
+  .sidebar-toggle{
+    display:none; position:fixed; top:14px; left:14px; z-index:70; width:38px; height:38px;
+    border-radius:var(--radius-sm); border:1px solid var(--line); background:var(--panel); color:var(--text);
+    font-size:16px; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .sidebar-overlay{ display:none; position:fixed; inset:0; background:rgba(5,7,9,.6); z-index:55; }
+
+  @media (max-width:880px){
+    .sidebar{ position:fixed; left:0; top:0; transform:translateX(-100%); transition:transform .25s ease; box-shadow:20px 0 50px rgba(0,0,0,.5); }
+    .sidebar.open{ transform:translateX(0); }
+    .sidebar-toggle{ display:flex; }
+    .sidebar-overlay.show{ display:block; }
+    .main{ padding-top:50px; }
+  }
 
   /* ---------- hero / global progress ---------- */
   .hero{ position:relative; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:28px 28px 24px; overflow:hidden; margin-bottom:18px;}
@@ -306,6 +339,28 @@
     font-family:'Space Grotesk',sans-serif;
   }
   .timer-btn-stop:hover{ background:rgba(255,107,107,.1); }
+  .timer-btn-pause{
+    font-size:14px; font-weight:700; padding:13px 30px; border-radius:999px;
+    background:transparent; color:var(--amber); border:1.5px solid var(--amber);
+    cursor:pointer; letter-spacing:.5px; transition:.2s; font-family:'Space Grotesk',sans-serif;
+  }
+  .timer-btn-pause:hover{ background:rgba(242,169,59,.1); }
+  .timer-btn-resume{
+    font-size:14px; font-weight:700; padding:13px 30px; border-radius:999px;
+    background:var(--teal); color:#06120f; border:none; cursor:pointer; letter-spacing:.5px;
+    transition:.2s; font-family:'Space Grotesk',sans-serif;
+  }
+  .timer-btn-resume:hover{ box-shadow:0 0 24px var(--teal-glow); transform:scale(1.03); }
+
+  /* resume-session banner */
+  .resume-banner{
+    display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap;
+    background:var(--panel); border:1px solid var(--amber); border-radius:var(--radius);
+    padding:14px 18px; margin-bottom:14px;
+  }
+  .rb-title{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:13px; color:var(--amber); display:flex; align-items:center; gap:7px; }
+  .rb-sub{ font-size:11px; color:var(--muted); margin-top:3px; font-family:'JetBrains Mono',monospace; }
+  .rb-actions{ display:flex; gap:8px; flex-shrink:0; }
 
   /* live ring pulse around clock */
   .timer-ring{
@@ -337,29 +392,47 @@
 </style>
 </head>
 <body>
-<div class="app" id="app">
+<button class="sidebar-toggle" id="sidebarToggle" title="Menu">☰</button>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-  <div class="topbar">
-    <div class="brand">
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
       <div class="brand-mark"></div>
       <div class="brand-text">
         <span class="name">STUDYGRID</span>
         <span class="tag">3000HR Mission Tracker</span>
       </div>
     </div>
-    <div class="top-right">
-      <div class="profile-pill" id="profilePill">
-        <div class="avatar" id="pillAvatar">—</div>
-        <div>
-          <div class="pname" id="pillName">—</div>
-          <div class="plevel" id="pillLevel">LV.1</div>
-        </div>
-      </div>
-      <div class="icon-btn" id="settingsBtn" title="Settings">⚙</div>
-    </div>
-  </div>
 
-  <div class="hero">
+    <nav class="sidebar-nav">
+      <a class="nav-item active" data-target="dashboardSection"><span class="nav-ic">◧</span> Dashboard</a>
+      <a class="nav-item" data-target="timerHero"><span class="nav-ic">⏱</span> Timer</a>
+      <a class="nav-item" data-target="roomSection"><span class="nav-ic">◎</span> Room</a>
+      <a class="nav-item" data-target="studyLogSection"><span class="nav-ic">▤</span> Study Log</a>
+    </nav>
+
+    <div class="sidebar-divider"></div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item" id="settingsBtn"><span class="nav-ic">⚙</span> Settings</button>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="profile-pill" id="profilePill">
+      <div class="avatar" id="pillAvatar">—</div>
+      <div>
+        <div class="pname" id="pillName">—</div>
+        <div class="plevel" id="pillLevel">LV.1</div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+<div class="app" id="app">
+
+  <div class="hero" id="dashboardSection">
     <div class="hero-top">
       <div>
         <div class="eyebrow">Mission · 3000 Hours</div>
@@ -390,6 +463,18 @@
     </div>
   </div>
 
+  <!-- RESUME SESSION BANNER -->
+  <div class="resume-banner" id="resumeBanner" style="display:none;">
+    <div>
+      <div class="rb-title">⏱ Unfinished session found</div>
+      <div class="rb-sub" id="resumeBannerSub">—</div>
+    </div>
+    <div class="rb-actions">
+      <button class="btn btn-sm" id="discardSessionBtn">Discard</button>
+      <button class="btn btn-primary btn-sm" id="resumeSessionBtn">Resume session</button>
+    </div>
+  </div>
+
   <!-- TIMER -->
   <div class="timer-hero" id="timerHero">
     <div class="timer-hero-inner">
@@ -407,8 +492,11 @@
       </div>
 
       <div class="timer-sub" id="timerSub">Enter your topic above and launch a session to start tracking</div>
-      <div class="timer-actions">
-        <button class="btn timer-btn-start" id="timerToggle">▶ Start Session</button>
+      <div class="timer-actions" id="timerActions">
+        <button class="btn timer-btn-start" id="startBtn">▶ Start Session</button>
+        <button class="btn timer-btn-pause" id="pauseBtn" style="display:none;">⏸ Pause</button>
+        <button class="btn timer-btn-resume" id="resumeBtn" style="display:none;">▶ Resume</button>
+        <button class="btn timer-btn-stop" id="stopBtn" style="display:none;">⏹ Stop & Log</button>
       </div>
     </div>
   </div>
@@ -457,7 +545,7 @@
   </div>
 
   <!-- ROOM -->
-  <div class="card room-card">
+  <div class="card room-card" id="roomSection">
     <div class="card-head">
       <div>
         <div class="card-title">Room</div>
@@ -508,7 +596,7 @@
   </div>
 
   <!-- STUDY LOG / NOTES -->
-  <div class="card">
+  <div class="card" id="studyLogSection">
     <div class="card-head">
       <div>
         <div class="card-title">Study Log</div>
@@ -518,6 +606,8 @@
     <div id="studyLogList"><div class="studylog-empty">No sessions logged yet. Log your first hours below.</div></div>
   </div>
 
+</div>
+  </div>
 </div>
 
 <!-- ONBOARDING MODAL -->
@@ -756,7 +846,7 @@ const LEVEL_TITLES = [
     groupCode: null, groupName: null
   };
 
-  let timer = { running:false, startedAt:null, tickHandle:null, currentTopic:'' };
+  let timer = { status:'idle', startedAt:null, accumulatedMs:0, tickHandle:null, heartbeatHandle:null, currentTopic:'' };
   let groupPollHandle = null;
   let cachedGroupData = null;
   let pendingTimerHours = null;
@@ -871,12 +961,13 @@ const LEVEL_TITLES = [
       cur.resources = cur.resources || [];
       cur.messages = cur.messages || [];
 
-      // Append running state markers to cloud entity parameters
-      let currentTimerState = { running: false, startedAt: null, topic: '' };
-      if (timer.running) {
+      // Append running/paused state markers to cloud entity parameters
+      let currentTimerState = { status: 'idle', startedAt: null, accumulatedMs: 0, topic: '' };
+      if (timer.status === 'running' || timer.status === 'paused') {
         currentTimerState = {
-          running: true,
+          status: timer.status,
           startedAt: timer.startedAt,
+          accumulatedMs: timer.accumulatedMs,
           topic: timer.currentTopic
         };
       }
@@ -902,6 +993,63 @@ const LEVEL_TITLES = [
       if(r && r.value) return JSON.parse(r.value);
     }catch(e){ return null; }
     return null;
+  }
+
+  // ---------- active session persistence (Supabase heartbeat + resume) ----------
+  // Stored as a row in the shared studygrid_kv table under key 'active-session:<user id>'.
+  // The `elapsed_time` field (in seconds) is kept current via the heartbeat below so the
+  // session can be resumed from the exact same point even after a refresh, crash, or
+  // closed tab — without needing to click "Save".
+  function activeSessionKey(){ return 'active-session:' + state.id; }
+
+  function currentElapsedMs(){
+    // While running, `startedAt` is a "virtual start" that has already been shifted
+    // backward (on resume) to account for previously-banked time — so the elapsed time
+    // is simply now minus that virtual start. Adding accumulatedMs on top here would
+    // double-count the paused segment, which was the bug.
+    if(timer.status === 'running') return Date.now() - timer.startedAt;
+    return timer.accumulatedMs;
+  }
+
+  async function persistActiveSession(){
+    if(!state.id || timer.status === 'idle') return;
+    const payload = {
+      user_id: state.id,
+      name: state.name,
+      topic: timer.currentTopic,
+      status: timer.status,                 // 'running' | 'paused'
+      started_at: timer.startedAt,           // virtual start (null while paused)
+      accumulated_ms: timer.accumulatedMs,   // banked elapsed time
+      elapsed_time: Math.floor(currentElapsedMs() / 1000), // seconds — synced every 10s
+      updated_at: Date.now()
+    };
+    try{ await window.storage.set(activeSessionKey(), JSON.stringify(payload), true); }
+    catch(e){ console.error('heartbeat sync failed', e); }
+  }
+
+  async function fetchActiveSession(){
+    if(!state.id) return null;
+    try{
+      const r = await window.storage.get(activeSessionKey(), true);
+      if(r && r.value) return JSON.parse(r.value);
+    }catch(e){ /* no saved session */ }
+    return null;
+  }
+
+  async function clearActiveSession(){
+    if(!state.id) return;
+    try{ await window.storage.delete(activeSessionKey(), true); }catch(e){ }
+  }
+
+  function startHeartbeat(){
+    stopHeartbeat();
+    // Auto-sync elapsed_time to Supabase every 10 seconds while the timer is running,
+    // so progress is never more than 10s stale even if the user never clicks Save.
+    timer.heartbeatHandle = setInterval(persistActiveSession, 10000);
+  }
+  function stopHeartbeat(){
+    if(timer.heartbeatHandle) clearInterval(timer.heartbeatHandle);
+    timer.heartbeatHandle = null;
   }
 
   async function addResourceToGroup(title, url){
@@ -1050,24 +1198,32 @@ const LEVEL_TITLES = [
     }
     list.innerHTML = '';
     state.sessionHistory.slice(0,20).forEach(s=>{
-      let dateStr, hoursText, noteText;
+      let dateStr, hoursText, noteText, hoursColor;
       // Detect if target element structure represents a live ticking item
       if (s.isLive) {
-        dateStr = '[Active Now]';
-        const elapsedMs = Date.now() - timer.startedAt;
+        const elapsedMs = currentElapsedMs();
         hoursText = fmtClock(elapsedMs);
-        noteText = `Studying: <span style="color:var(--teal); font-weight:600;">${escapeHtml(s.note)}...</span>`;
+        if (timer.status === 'paused') {
+          dateStr = '[Paused]';
+          hoursColor = 'var(--amber)';
+          noteText = `Paused: <span style="color:var(--amber); font-weight:600;">${escapeHtml(s.note)}</span>`;
+        } else {
+          dateStr = '[Active Now]';
+          hoursColor = 'var(--teal)';
+          noteText = `Studying: <span style="color:var(--teal); font-weight:600;">${escapeHtml(s.note)}...</span>`;
+        }
       } else {
         const d = new Date(s.ts);
         dateStr = d.toLocaleDateString(undefined,{month:'short', day:'numeric'}) + ' · ' + d.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'});
         hoursText = formatHHMMSS(s.hours);
+        hoursColor = 'inherit';
         noteText = s.note ? escapeHtml(s.note) : 'No notes added';
       }
       const row = document.createElement('div');
       row.className = 'log-row';
       row.innerHTML = `
         <div class="ld-date">${dateStr}</div>
-        <div class="ld-hours mono" style="color: ${s.isLive ? 'var(--teal)' : 'inherit'}; width:74px;">${hoursText}</div>
+        <div class="ld-hours mono" style="color: ${hoursColor}; width:74px;">${hoursText}</div>
         <div class="ld-note">${noteText}</div>
       `;
       list.appendChild(row);
@@ -1096,14 +1252,21 @@ const LEVEL_TITLES = [
       const isOnline = secondsAgo <= 60; 
       const statusClass = isOnline ? 'live' : 'idle';
       
-      // Render running timer indicators on corresponding member panels
+      // Render running/paused timer indicators on corresponding member panels
       let runtimeText = '';
-      if (m.timerState && m.timerState.running && isOnline) {
-        const elapsedSeconds = Math.floor((Date.now() - m.timerState.startedAt) / 1000);
+      const ts = m.timerState;
+      if (ts && isOnline && (ts.status === 'running' || ts.status === 'paused')) {
+        const elapsedSeconds = ts.status === 'running'
+          ? Math.floor((Date.now() - ts.startedAt) / 1000)
+          : Math.floor((ts.accumulatedMs || 0) / 1000);
         const h = String(Math.floor(elapsedSeconds / 3600)).padStart(2,'0');
         const min = String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2,'0');
         const sec = String(elapsedSeconds % 60).padStart(2,'0');
-        runtimeText = `<span style="color:var(--teal); font-weight:600;"> Studying: ${escapeHtml(m.timerState.topic)} (${h}:${min}:${sec})</span>`;
+        if (ts.status === 'running') {
+          runtimeText = `<span style="color:var(--teal); font-weight:600;"> Studying: ${escapeHtml(ts.topic)} (${h}:${min}:${sec})</span>`;
+        } else {
+          runtimeText = `<span style="color:var(--amber); font-weight:600;"> Paused: ${escapeHtml(ts.topic)} (${h}:${min}:${sec})</span>`;
+        }
       } else {
         runtimeText = m.todayHours > 0 ? `Logged ${formatHHMMSS(m.todayHours)} today` : 'Offline / Idle';
       }
@@ -1231,50 +1394,10 @@ const LEVEL_TITLES = [
     return h+':'+m+':'+sec;
   }
   function tickTimer(){
-    const elapsed = Date.now()-timer.startedAt;
-    document.getElementById('timerDisplay').textContent = fmtClock(elapsed);
-  }
-  
-  function startTimer(){
-    const topicInput = document.getElementById('preSessionTopic');
-    timer.currentTopic = topicInput.value.trim() || 'General Focus';
-    topicInput.disabled = true;
-
-    timer.running = true; 
-    timer.startedAt = Date.now();
-    
-    // Initialize explicit placeholder item array profiles inside local session histories
-    state.sessionHistory.unshift({
-      ts: Date.now(),
-      hours: 0,
-      note: timer.currentTopic,
-      isLive: true
-    });
-
-    const hero = document.getElementById('timerHero');
-    hero.classList.add('running');
-    document.getElementById('timerDisplay').classList.add('running');
-    document.getElementById('dockDot').classList.add('show');
-    document.getElementById('timerStatusLabel').textContent = 'LIVE';
-    document.getElementById('timerStatusLabel').classList.add('live');
-    document.getElementById('timerSub').textContent = `Locking in on: ${timer.currentTopic}`;
-    const btn = document.getElementById('timerToggle');
-    btn.textContent = '⏹ Stop Session';
-    btn.className = 'timer-btn-stop';
-    
-    timer.tickHandle = setInterval(tickTimer, 1000);
-    syncGroupSelf();
+    document.getElementById('timerDisplay').textContent = fmtClock(currentElapsedMs());
   }
 
-  function stopTimerAndPromptLog(){
-    clearInterval(timer.tickHandle);
-    const elapsedMs = Date.now()-timer.startedAt;
-    timer.running = false;
-    
-    const topicInput = document.getElementById('preSessionTopic');
-    topicInput.disabled = false;
-    topicInput.value = '';
-
+  function setTimerUIIdle(){
     const hero = document.getElementById('timerHero');
     hero.classList.remove('running');
     document.getElementById('timerDisplay').classList.remove('running');
@@ -1283,10 +1406,112 @@ const LEVEL_TITLES = [
     document.getElementById('timerStatusLabel').textContent = 'READY';
     document.getElementById('timerStatusLabel').classList.remove('live');
     document.getElementById('timerSub').textContent = 'Enter your topic above and launch a session to start tracking';
-    const btn = document.getElementById('timerToggle');
-    btn.textContent = '▶ Start Session';
-    btn.className = 'timer-btn-start';
-    
+    document.getElementById('startBtn').style.display = 'inline-block';
+    document.getElementById('pauseBtn').style.display = 'none';
+    document.getElementById('resumeBtn').style.display = 'none';
+    document.getElementById('stopBtn').style.display = 'none';
+  }
+  function setTimerUIRunning(){
+    const hero = document.getElementById('timerHero');
+    hero.classList.add('running');
+    document.getElementById('timerDisplay').classList.add('running');
+    document.getElementById('dockDot').classList.add('show');
+    document.getElementById('timerStatusLabel').textContent = 'LIVE';
+    document.getElementById('timerStatusLabel').classList.add('live');
+    document.getElementById('timerSub').textContent = `Locking in on: ${timer.currentTopic}`;
+    document.getElementById('startBtn').style.display = 'none';
+    document.getElementById('pauseBtn').style.display = 'inline-block';
+    document.getElementById('resumeBtn').style.display = 'none';
+    document.getElementById('stopBtn').style.display = 'inline-block';
+  }
+  function setTimerUIPaused(){
+    document.getElementById('timerDisplay').classList.remove('running');
+    document.getElementById('dockDot').classList.remove('show');
+    document.getElementById('timerStatusLabel').textContent = 'PAUSED';
+    document.getElementById('timerStatusLabel').classList.remove('live');
+    document.getElementById('timerSub').textContent = `Paused: ${timer.currentTopic}`;
+    document.getElementById('startBtn').style.display = 'none';
+    document.getElementById('pauseBtn').style.display = 'none';
+    document.getElementById('resumeBtn').style.display = 'inline-block';
+    document.getElementById('stopBtn').style.display = 'inline-block';
+  }
+
+  function startTimer(){
+    const topicInput = document.getElementById('preSessionTopic');
+    timer.currentTopic = topicInput.value.trim() || 'General Focus';
+    topicInput.disabled = true;
+
+    timer.status = 'running';
+    timer.accumulatedMs = 0;
+    timer.startedAt = Date.now();
+
+    // Initialize explicit placeholder item array profiles inside local session histories
+    state.sessionHistory.unshift({
+      ts: Date.now(),
+      hours: 0,
+      note: timer.currentTopic,
+      isLive: true
+    });
+
+    setTimerUIRunning();
+    timer.tickHandle = setInterval(tickTimer, 1000);
+    startHeartbeat();
+    persistActiveSession();
+    syncGroupSelf();
+  }
+
+  // ---------- 1. Resume session logic ----------
+  // Pause: `startedAt` is already a virtual start that accounts for any prior banked
+  // time, so `Date.now() - startedAt` is the new running total — we overwrite
+  // accumulatedMs with it (not add to it), otherwise the banked time gets counted twice.
+  function pauseTimer(){
+    if(timer.status !== 'running') return;
+    timer.accumulatedMs = Date.now() - timer.startedAt;
+    timer.status = 'paused';
+    timer.startedAt = null;
+    clearInterval(timer.tickHandle);
+    stopHeartbeat();
+    setTimerUIPaused();
+    persistActiveSession();
+    syncGroupSelf();
+    renderStudyLog();
+  }
+
+  // Resume: the correct starting point is "now minus whatever was already banked" —
+  // that way Date.now() - startedAt always equals the true total elapsed time,
+  // so the clock continues exactly where it left off instead of resetting to zero.
+  function resumeTimer(){
+    if(timer.status === 'running') return;
+    timer.startedAt = Date.now() - timer.accumulatedMs;
+    timer.status = 'running';
+
+    document.getElementById('preSessionTopic').disabled = true;
+
+    setTimerUIRunning();
+    timer.tickHandle = setInterval(tickTimer, 1000);
+    startHeartbeat();
+    persistActiveSession();
+    syncGroupSelf();
+    renderStudyLog();
+  }
+
+  function stopTimerAndPromptLog(){
+    clearInterval(timer.tickHandle);
+    stopHeartbeat();
+    const elapsedMs = currentElapsedMs();
+
+    timer.status = 'idle';
+    timer.startedAt = null;
+    timer.accumulatedMs = 0;
+
+    const topicInput = document.getElementById('preSessionTopic');
+    topicInput.disabled = false;
+    topicInput.value = '';
+
+    setTimerUIIdle();
+    clearActiveSession();
+    closeResumeBanner();
+
     const hrs = Math.round((elapsedMs/3600000)*100)/100;
     if(hrs < (1/60)) {
       state.sessionHistory.shift();
@@ -1301,6 +1526,47 @@ const LEVEL_TITLES = [
     document.getElementById('logNoteInput').value = '';
     openModal('logModal');
     syncGroupSelf();
+  }
+
+  // ---------- resuming a session after a refresh / closed tab / crash ----------
+  function showResumeBanner(saved){
+    document.getElementById('resumeBannerSub').textContent =
+      `${timer.currentTopic} · ${fmtClock(timer.accumulatedMs)} elapsed · last synced ${timeAgo(saved.updated_at)}`;
+    document.getElementById('resumeBanner').style.display = 'flex';
+  }
+  function closeResumeBanner(){
+    document.getElementById('resumeBanner').style.display = 'none';
+  }
+
+  function restoreSessionFromCloud(saved){
+    timer.currentTopic = saved.topic || 'General Focus';
+    // `elapsed_time` is recomputed on every 10s heartbeat regardless of running/paused
+    // state, while `accumulated_ms` is only updated at the moment of an explicit pause —
+    // so elapsed_time is the more current source of truth here.
+    timer.accumulatedMs = (typeof saved.elapsed_time === 'number')
+      ? saved.elapsed_time * 1000
+      : (saved.accumulated_ms || 0);
+    timer.status = 'paused'; // land paused — user explicitly taps Resume to keep ticking
+
+    const topicInput = document.getElementById('preSessionTopic');
+    topicInput.value = timer.currentTopic;
+    topicInput.disabled = true;
+
+    // The local in-memory "active now" log row was lost on reload — recreate it.
+    state.sessionHistory.unshift({ ts: Date.now(), hours: 0, note: timer.currentTopic, isLive: true });
+
+    setTimerUIPaused();
+    document.getElementById('timerDisplay').textContent = fmtClock(timer.accumulatedMs);
+  }
+
+  async function checkResumableSession(){
+    if(!state.id) return;
+    const saved = await fetchActiveSession();
+    if(saved && (saved.status === 'running' || saved.status === 'paused')){
+      restoreSessionFromCloud(saved);
+      showResumeBanner(saved);
+      renderStudyLog();
+    }
   }
 
   // ---------- modals ----------
@@ -1340,6 +1606,26 @@ const LEVEL_TITLES = [
 
   // ---------- setup bindings ----------
   function wireEvents(){
+    // ---------- sidebar nav + mobile toggle ----------
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    function openSidebar(){ sidebar.classList.add('open'); overlay.classList.add('show'); }
+    function closeSidebar(){ sidebar.classList.remove('open'); overlay.classList.remove('show'); }
+    document.getElementById('sidebarToggle').onclick = ()=>{
+      sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+    };
+    overlay.onclick = closeSidebar;
+
+    document.querySelectorAll('.sidebar-nav .nav-item[data-target]').forEach(item=>{
+      item.onclick = ()=>{
+        document.querySelectorAll('.sidebar-nav .nav-item[data-target]').forEach(n=>n.classList.remove('active'));
+        item.classList.add('active');
+        const target = document.getElementById(item.dataset.target);
+        if(target) target.scrollIntoView({ behavior:'smooth', block:'start' });
+        closeSidebar();
+      };
+    });
+
     document.getElementById('chatInput').onkeydown = (e) => {
       if (e.key === 'Enter') sendChatMessage();
     };
@@ -1405,9 +1691,26 @@ const LEVEL_TITLES = [
       await addStudyHoursRecord(hrs);
     };
 
-    document.getElementById('timerToggle').onclick = ()=>{
-      if(timer.running) stopTimerAndPromptLog();
-      else startTimer();
+    document.getElementById('startBtn').onclick = startTimer;
+    document.getElementById('pauseBtn').onclick = pauseTimer;
+    document.getElementById('resumeBtn').onclick = resumeTimer;
+    document.getElementById('stopBtn').onclick = stopTimerAndPromptLog;
+
+    document.getElementById('resumeSessionBtn').onclick = ()=>{
+      resumeTimer();
+      closeResumeBanner();
+    };
+    document.getElementById('discardSessionBtn').onclick = async ()=>{
+      if(state.sessionHistory[0] && state.sessionHistory[0].isLive) state.sessionHistory.shift();
+      timer.status = 'idle';
+      timer.startedAt = null;
+      timer.accumulatedMs = 0;
+      document.getElementById('preSessionTopic').disabled = false;
+      document.getElementById('preSessionTopic').value = '';
+      setTimerUIIdle();
+      await clearActiveSession();
+      closeResumeBanner();
+      renderStudyLog();
     };
 
     document.getElementById('openGroupModalBtn').onclick = ()=>openModal('groupModal');
@@ -1538,11 +1841,18 @@ const LEVEL_TITLES = [
     wireEvents();
     await loadProfile();
     await maybeOnboard();
-    
+    await checkResumableSession();
+
+    // Best-effort extra sync the instant the tab is hidden/backgrounded —
+    // on top of the 10s heartbeat, for extra robustness against a sudden close.
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.hidden && timer.status === 'running') persistActiveSession();
+    });
+
     // Core Engine Tick Setup
     setInterval(() => {
       renderCountdown();
-      if (timer.running) {
+      if (timer.status === 'running') {
         renderStudyLog();
       }
       if (state.groupCode && cachedGroupData) {
