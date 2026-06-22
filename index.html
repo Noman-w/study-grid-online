@@ -1096,20 +1096,54 @@
     const text  = input.value.trim();
     if(!text || !state.groupCode) return;
     input.value = '';
+
+    const newMsg = { sender:state.name, text, ts:Date.now(), id:uid(6) };
+
+    // ── OPTIMISTIC: show the bubble instantly, no waiting ──
+    appendChatBubble(newMsg, true);
+    chatUserScrolled = false;
+    hideChatNotif();
+    const chatBox = document.getElementById('chatMessages');
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+    // ── Background: persist to storage (fire and forget) ──
     const key = 'group:'+state.groupCode;
-    try{
-      let cur = { name:state.groupName||state.groupCode, members:{}, resources:[], messages:[] };
-      const r = await window.storage.get(key,true);
-      if(r&&r.value) cur=JSON.parse(r.value);
-      cur.messages = cur.messages||[];
-      cur.messages.push({ sender:state.name, text, ts:Date.now(), id:uid(6) });
-      if(cur.messages.length>50) cur.messages.shift();
-      await window.storage.set(key, JSON.stringify(cur), true);
-      // force scroll to bottom after your own send
-      chatUserScrolled = false;
-      hideChatNotif();
-      renderRoom();
-    }catch(e){ console.error('chat failed', e); }
+    (async ()=>{
+      try{
+        let cur = { name:state.groupName||state.groupCode, members:{}, resources:[], messages:[] };
+        const r = await window.storage.get(key,true);
+        if(r&&r.value) cur=JSON.parse(r.value);
+        cur.messages = cur.messages||[];
+        // avoid duplicate if poll already added it
+        if(!cur.messages.find(m=>m.id===newMsg.id)){
+          cur.messages.push(newMsg);
+        }
+        if(cur.messages.length>50) cur.messages.shift();
+        await window.storage.set(key, JSON.stringify(cur), true);
+      }catch(e){ console.error('chat failed', e); }
+    })();
+  }
+
+  /* Append a single chat bubble to the chat box without re-rendering everything */
+  function appendChatBubble(msg, isMine){
+    const chatBox = document.getElementById('chatMessages');
+    // deduplicate: don't add if a bubble with this id already exists
+    if(msg.id && chatBox.querySelector('[data-msg-id="'+msg.id+'"]')) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'chat-msg '+(isMine?'mine':'theirs');
+    if(msg.id) wrapper.dataset.msgId = msg.id;
+
+    const ts = msg.ts ? new Date(msg.ts) : null;
+    const timeStr = ts ? ts.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}) : '';
+    const tickHtml = isMine ? '<span class="chat-ticks one" title="Sent">✓</span>' : '';
+
+    wrapper.innerHTML = `
+      ${!isMine?`<div class="chat-sender">${escapeHtml(msg.sender)}</div>`:''}
+      <div class="chat-bubble">${escapeHtml(msg.text)}</div>
+      <div class="chat-meta"><span class="chat-time">${timeStr}</span>${tickHtml}</div>
+    `;
+    chatBox.appendChild(wrapper);
   }
 
   /* ── CHAT NOTIFICATION HELPERS ─────────────────────────────────────────── */
@@ -1345,38 +1379,33 @@
     const newMsgCount  = messages.length;
     chatBox.dataset.lastCount = newMsgCount;
 
-    chatBox.innerHTML='';
     const memberCount = Object.keys(group.members||{}).length;
 
+    // Instead of wiping and rebuilding, append only new messages (dedup by id)
+    // For tick updates on existing bubbles, we do a targeted update
     messages.forEach(msg=>{
       const isMine = msg.sender === state.name;
-      const wrapper = document.createElement('div');
-      wrapper.className = 'chat-msg '+(isMine?'mine':'theirs');
+      const existing = msg.id ? chatBox.querySelector('[data-msg-id="'+msg.id+'"]') : null;
 
-      // timestamp
-      const ts  = msg.ts ? new Date(msg.ts) : null;
-      const timeStr = ts ? ts.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}) : '';
-
-      // tick logic: seen tracking
-      if(!group.seen) group.seen={};
-      const seenBy = msg.ts ? Object.values(group.seen||{}).filter(v=>v>= (msg.ts||0)).length : 0;
-      let tickHtml = '';
-      if(isMine){
-        if(seenBy >= memberCount-1 && memberCount>1){
-          tickHtml = '<span class="chat-ticks two" title="Seen by all">✓✓</span>';
-        } else if(seenBy>=1){
-          tickHtml = '<span class="chat-ticks two" title="Seen by '+seenBy+'">✓✓</span>';
-        } else {
-          tickHtml = '<span class="chat-ticks one" title="Sent">✓</span>';
-        }
+      if(!existing){
+        // new message not yet in DOM — append it
+        appendChatBubble(msg, isMine);
       }
 
-      wrapper.innerHTML = `
-        ${!isMine?`<div class="chat-sender">${escapeHtml(msg.sender)}</div>`:''}
-        <div class="chat-bubble">${escapeHtml(msg.text)}</div>
-        <div class="chat-meta"><span class="chat-time">${timeStr}</span>${tickHtml}</div>
-      `;
-      chatBox.appendChild(wrapper);
+      // update ticks on own messages
+      if(isMine && existing){
+        const seenBy = msg.ts ? Object.values(group.seen||{}).filter(v=>v>=(msg.ts||0)).length : 0;
+        const tickEl = existing.querySelector('.chat-ticks');
+        if(tickEl){
+          if(seenBy>=1){
+            tickEl.className='chat-ticks two';
+            tickEl.title='Seen';
+          } else {
+            tickEl.className='chat-ticks one';
+            tickEl.title='Sent';
+          }
+        }
+      }
     });
 
     // Update the seen timestamp so others know we've read up to now
@@ -1398,7 +1427,6 @@
       chatBox.scrollTop = chatBox.scrollHeight;
       hideChatNotif();
     } else {
-      // keep position, show badge if new messages arrived
       chatBox.scrollTop = prevScrollTop;
       if(newMsgCount > prevMsgCount && prevMsgCount > 0){
         const diff = newMsgCount - prevMsgCount;
