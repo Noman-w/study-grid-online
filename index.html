@@ -255,6 +255,23 @@
   .toast .tt{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;color:var(--teal);margin-bottom:2px;}
   ::-webkit-scrollbar{width:6px;}::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px;}
   :focus-visible{outline:2px solid var(--teal);outline-offset:2px;}
+
+  /* ── chat bubbles ───────────────────────────────────────────────────────── */
+  .chat-msg{display:flex;flex-direction:column;max-width:80%;}
+  .chat-msg.mine{align-self:flex-end;align-items:flex-end;}
+  .chat-msg.theirs{align-self:flex-start;align-items:flex-start;}
+  .chat-sender{font-size:9.5px;font-weight:600;letter-spacing:.3px;margin-bottom:2px;padding:0 4px;}
+  .chat-msg.mine .chat-sender{color:var(--teal);opacity:.7;}
+  .chat-msg.theirs .chat-sender{color:var(--muted-dim);}
+  .chat-bubble{padding:6px 10px;border-radius:10px;font-size:12px;line-height:1.45;word-break:break-word;}
+  .chat-msg.mine .chat-bubble{
+    background:var(--teal);color:#06120f;font-weight:500;
+    border-radius:10px 10px 2px 10px;box-shadow:0 0 12px var(--teal-glow);
+  }
+  .chat-msg.theirs .chat-bubble{
+    background:var(--panel-2);color:var(--text);
+    border:1px solid var(--line);border-radius:10px 10px 10px 2px;
+  }
 </style>
 </head>
 <body>
@@ -719,6 +736,11 @@
   let cachedGroupData = null;
   let pendingTimerHours = null;
 
+  /* chat state — tracks last-seen message for smart-scroll & toast notifications */
+  let lastSeenMessageTs = 0;   // timestamp of the newest message seen so far
+  let chatInitialized   = false; // true after the very first successful render
+  let forceChatScroll   = false; // set to true when the user just sent a message
+
   /* ── utils ──────────────────────────────────────────────────────────────── */
   function uid(len){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<len;i++) s+=c[Math.floor(Math.random()*c.length)]; return s; }
   function localDateKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -1083,6 +1105,7 @@
       cur.messages.push({ sender:state.name, text, ts:Date.now() });
       if(cur.messages.length>50) cur.messages.shift();
       await window.storage.set(key, JSON.stringify(cur), true);
+      forceChatScroll = true;   // user just sent — always jump to bottom
       renderRoom();
     }catch(e){ console.error('chat failed', e); }
   }
@@ -1287,16 +1310,40 @@
 
     runRosterDOMEngine(group);
 
-    /* chat */
+    /* chat ── left/right bubbles + smart-scroll + toast notifications */
     const chatBox  = document.getElementById('chatMessages');
     const messages = group.messages||[];
+
+    // Smart-scroll: was the user already near the bottom (≤ 50 px away)?
+    const nearBottom = chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight <= 50;
+    const shouldScroll = forceChatScroll || nearBottom;
+    forceChatScroll = false;
+
+    // New-message notifications — only AFTER the first full render
+    if(chatInitialized){
+      messages.forEach(msg=>{
+        if((msg.ts||0) > lastSeenMessageTs && msg.sender !== state.name){
+          showToast('New Message 💬', msg.sender+': '+msg.text);
+        }
+      });
+    }
+
+    // Advance the watermark to the newest message we've now seen
+    const maxTs = messages.reduce((acc,m)=>Math.max(acc,m.ts||0), 0);
+    if(maxTs > lastSeenMessageTs) lastSeenMessageTs = maxTs;
+    chatInitialized = true;
+
+    // Rebuild bubble DOM
     chatBox.innerHTML='';
     messages.forEach(msg=>{
-      const mDiv = document.createElement('div');
-      mDiv.innerHTML = `<span style="color:var(--teal);font-weight:600;">${escapeHtml(msg.sender)}:</span> ${escapeHtml(msg.text)}`;
+      const isMine = msg.sender === state.name;
+      const mDiv   = document.createElement('div');
+      mDiv.className = 'chat-msg '+(isMine?'mine':'theirs');
+      mDiv.innerHTML = `<div class="chat-sender">${escapeHtml(msg.sender)}</div><div class="chat-bubble">${escapeHtml(msg.text)}</div>`;
       chatBox.appendChild(mDiv);
     });
-    chatBox.scrollTop = chatBox.scrollHeight;
+
+    if(shouldScroll) chatBox.scrollTop = chatBox.scrollHeight;
 
     /* resources */
     const resources = group.resources||[];
