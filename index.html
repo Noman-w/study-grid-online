@@ -1769,6 +1769,19 @@
       saveProfile();
       await flushProfileSave(); // critical — flush immediately on first-time setup
       closeModal('onboardModal');
+
+      // ── Restore timer NOW that state.id is available ─────────────────────
+      // boot() called loadPersistedTimer() too early (before the user logged
+      // in), so state.id was empty and the fetch was skipped.  Calling it
+      // again here — after the profile is fully loaded — gives instant timer
+      // restore on login with no refresh needed.
+      const hadTimer = await loadPersistedTimer();
+      if(hadTimer){
+        restoreTimerUI();
+      } else {
+        applyTimerUI();
+      }
+
       render();
       if(state.groupCode) startGroupPolling();
     };
@@ -1785,12 +1798,18 @@
       Notification.requestPermission();
     }
 
-    // ── Restore any timer that was running/paused before page closed ──────
-    const hadTimer = await loadPersistedTimer();
-    if(hadTimer){
-      restoreTimerUI();
-    } else {
-      applyTimerUI();
+    // ── Restore timer (only when already logged in from local storage) ──────
+    // If the user had to go through the login modal, loadPersistedTimer() is
+    // called inside the onboardSubmit handler instead (after state.id is set).
+    // Running it here covers the fast path: returning user whose profile was
+    // already in local storage so maybeOnboard() returned immediately.
+    if(state.id){
+      const hadTimer = await loadPersistedTimer();
+      if(hadTimer){
+        restoreTimerUI();
+      } else {
+        applyTimerUI();
+      }
     }
 
     // ── 1-second loop: countdown + extrapolated friend timers in roster ───
