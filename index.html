@@ -800,8 +800,24 @@
 
   function timerCloudKey(){ return 'timer:'+state.id; }
 
-  /** Write current timerRecord to Supabase.  Fire-and-forget on the fast path. */
-  async function persistTimer(){
+  /** Write current timerRecord to Supabase.
+   * Fire-and-forget on the fast path; debounced so rapid state transitions
+   * (e.g. pause → stop within 1 second) don't each fire a separate network
+   * round-trip.  The 1.5-second window is short enough that the record is
+   * always up-to-date when a friend's roster next refreshes.               */
+  let _persistTimerHandle = null;
+  function persistTimer(){
+    if(!state.id || !sb) return;
+    if(_persistTimerHandle) clearTimeout(_persistTimerHandle);
+    _persistTimerHandle = setTimeout(async ()=>{
+      _persistTimerHandle = null;
+      await window.storage.set(timerCloudKey(), JSON.stringify(timerRecord), true);
+    }, 1500);
+  }
+
+  /** Flush timer persist immediately (used at stop/log time). */
+  async function flushPersistTimer(){
+    if(_persistTimerHandle){ clearTimeout(_persistTimerHandle); _persistTimerHandle = null; }
     if(!state.id || !sb) return;
     await window.storage.set(timerCloudKey(), JSON.stringify(timerRecord), true);
   }
@@ -841,11 +857,11 @@
 
     // Live placeholder in session history
     state.sessionHistory.unshift({ ts:Date.now(), hours:0, note:topic, isLive:true });
-    saveProfile();
+    saveProfile(); // debounced cloud write — will fire ~4s later
 
     startTick();
     applyTimerUI();
-    syncGroupSelf();
+    syncGroupSelf(); // debounced — collapses with any rapid follow-up calls
   }
 
   /* ── PAUSE ──────────────────────────────────────────────────────────────── */
@@ -878,9 +894,8 @@
     stopTick();
 
     // Push a frozen "paused" snapshot to the cloud so the member stays visible
-    // in the room roster while the save modal is open (or if they close their
-    // browser before saving). The LOCAL timerRecord resets to idle immediately
-    // so applyTimerUI() shows the Start button + topic field correctly.
+    // in the room roster while the save modal is open.  Use flush so it goes
+    // out immediately — the log modal is about to open.
     const cloudSnapshot = {
       status              : 'paused',
       started_at          : null,
@@ -888,7 +903,11 @@
       topic               : stoppedTopic,
     };
     if(state.id && sb){
-      window.storage.set('timer:'+state.id, JSON.stringify(cloudSnapshot), true);
+      // Override the timerRecord briefly to write the snapshot, then restore
+      const _prev = timerRecord;
+      timerRecord = cloudSnapshot;
+      await flushPersistTimer();
+      timerRecord = _prev;
     }
 
     // Local record → idle (drives UI only)
@@ -904,7 +923,7 @@
     if(hrs < (30/3600)){
       // < 30 seconds: silently discard — clear the cloud record too
       if(state.id && sb){
-        window.storage.set('timer:'+state.id, JSON.stringify(timerRecord), true);
+        await flushPersistTimer(); // timerRecord is already idle at this point
       }
       state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
       saveProfile();
@@ -1027,17 +1046,50 @@
     }catch(e){}
     return false;
   }
+  /* saveProfile — local write is instant; cloud write is debounced so that
+   * rapid consecutive calls (e.g. start-timer → syncGroupSelf → render all in
+   * the same tick) collapse into a single Supabase upsert.  The 4-second
+   * window means the write always happens within a few seconds of the action
+   * while eliminating duplicate network round-trips.                        */
+  let _saveProfileTimer = null;
   async function saveProfile(){
     try{
+      // Local write — always immediate (no Supabase, no egress)
       await window.storage.set(STORAGE_KEY, JSON.stringify(state), false);
-      if(state.name){
+    }catch(e){ console.error('save local failed', e); }
+    // Cloud write — debounced: cancel any pending and schedule one new write
+    if(_saveProfileTimer) clearTimeout(_saveProfileTimer);
+    _saveProfileTimer = setTimeout(async ()=>{
+      _saveProfileTimer = null;
+      if(!state.name) return;
+      try{
         await window.storage.set('user-profile:'+state.name.toLowerCase(), JSON.stringify(state), true);
-      }
-    }catch(e){ console.error('save failed', e); }
+      }catch(e){ console.error('save cloud failed', e); }
+    }, 4000);
+  }
+
+  /* Flush any pending cloud save immediately (call before critical exits). */
+  async function flushProfileSave(){
+    if(!_saveProfileTimer) return;
+    clearTimeout(_saveProfileTimer);
+    _saveProfileTimer = null;
+    if(!state.name) return;
+    try{
+      await window.storage.set('user-profile:'+state.name.toLowerCase(), JSON.stringify(state), true);
+    }catch(e){ console.error('flush save failed', e); }
   }
 
   /* ── GROUP SYNC ─────────────────────────────────────────────────────────── */
-  async function syncGroupSelf(){
+  /* syncGroupSelf — debounced so that actions that fire in quick succession
+   * (e.g. stopTimer → persistTimer → syncGroupSelf all at once) produce only
+   * ONE Supabase GET + SET pair instead of several.  The returned promise
+   * resolves with the latest group data once the write actually fires.
+   * For callers that immediately need the return value (addStudyHoursRecord),
+   * the debounce is flushed synchronously via _flushGroupSync().            */
+  let _groupSyncTimer = null;
+  let _groupSyncResolvers = [];
+
+  async function _doGroupSync(){
     if(!state.groupCode) return null;
     const key = 'group:'+state.groupCode;
     try{
@@ -1059,16 +1111,40 @@
         title         : lvl.title,
         todayHours    : state.dailyLog[today]||0,
         dailyGoalHours: state.dailyGoalHours,
-        lastActive    : Date.now(),   // ← set only here, only on a real user action
-        // full timerRecord so friends can extrapolate the clock from started_at
+        lastActive    : Date.now(),
         timerRecord   : { ...timerRecord },
         recentLog     : (state.sessionHistory||[]).filter(s=>!s.isLive).slice(0,5)
                           .map(s=>({ ts:s.ts, hours:s.hours, note:(s.note||'').slice(0,200) })),
       };
       if(state.groupName) cur.name = state.groupName;
       await window.storage.set(key, JSON.stringify(cur), true);
-      return cur; // ← let callers reuse this instead of re-fetching the whole blob
+      return cur;
     }catch(e){ console.error('group sync failed', e); return null; }
+  }
+
+  function syncGroupSelf(){
+    return new Promise(resolve=>{
+      if(!state.groupCode){ resolve(null); return; }
+      _groupSyncResolvers.push(resolve);
+      if(_groupSyncTimer) clearTimeout(_groupSyncTimer);
+      _groupSyncTimer = setTimeout(async ()=>{
+        _groupSyncTimer = null;
+        const resolvers = _groupSyncResolvers.splice(0);
+        const result = await _doGroupSync();
+        resolvers.forEach(r => r(result));
+      }, 2000); // 2-second debounce window
+    });
+  }
+
+  /* Flush immediately — used when callers need the result right away */
+  async function _flushGroupSync(){
+    if(!_groupSyncTimer) return null;
+    clearTimeout(_groupSyncTimer);
+    _groupSyncTimer = null;
+    const resolvers = _groupSyncResolvers.splice(0);
+    const result = await _doGroupSync();
+    resolvers.forEach(r => r(result));
+    return result;
   }
 
   async function fetchGroup(){
@@ -1435,7 +1511,8 @@
 
     await saveProfile();
     render();
-    const g = await syncGroupSelf();
+    // Flush immediately here since we need the result to pass to renderRoom
+    const g = await _flushGroupSync();
     renderRoom(g); // ← reuse the data syncGroupSelf already wrote/has, no extra GET
 
     const newLevel     = getLevelInfo(state.totalXP).level;
@@ -1471,10 +1548,11 @@
         const data = JSON.parse(e.target.result);
         if(typeof data.totalHours!=='number') throw new Error('invalid');
         state = Object.assign(state, data);
-        await saveProfile();
+        saveProfile(); // schedule debounced cloud write
+        await flushProfileSave(); // flush immediately for import (critical path)
         showToast('Backup restored','Historical tracking profile reloaded.');
         render();
-        if(state.groupCode){ await syncGroupSelf(); startGroupPolling(); }
+        if(state.groupCode){ await _flushGroupSync(); startGroupPolling(); }
       }catch(err){ alert('Invalid backup file.'); }
     };
     reader.readAsText(file);
@@ -1546,14 +1624,15 @@
     document.getElementById('timerStopFromPause').onclick= stopTimerAndLog;
 
     /* log modal */
-    document.getElementById('logCancel').onclick = ()=>{
+    document.getElementById('logCancel').onclick = async ()=>{
       pendingTimerHours = null;
       // User discarded — now clear the cloud timer record
       timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
       persistTimer();
       state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
       saveProfile(); render(); closeModal('logModal');
-      if(state.groupCode) syncGroupSelf();
+      // Flush group sync immediately so roster updates now
+      if(state.groupCode) await _flushGroupSync();
     };
     document.getElementById('logSubmit').onclick = async ()=>{
       const hrs       = pendingTimerHours;
@@ -1561,9 +1640,9 @@
       if(!hrs||hrs<=0) return;
       closeModal('logModal');
       pendingTimerHours = null;
-      // Session is now saved — clear the cloud timer record
+      // Session is now saved — clear the cloud timer record immediately
       timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
-      persistTimer();
+      await flushPersistTimer(); // flush so the idle state hits Supabase right away
       const liveIdx = state.sessionHistory.findIndex(s=>s.isLive);
       if(liveIdx!==-1){
         const topic = state.sessionHistory[liveIdx].note;
@@ -1586,8 +1665,9 @@
     document.getElementById('settingsSave').onclick   = async ()=>{
       const goal = parseFloat(document.getElementById('settingsGoal').value);
       if(goal>0) state.dailyGoalHours = goal;
-      await saveProfile(); render();
-      if(state.groupCode) syncGroupSelf();
+      saveProfile(); // debounced — no need to await
+      render();
+      if(state.groupCode) syncGroupSelf(); // debounced — collapses with profile save timing
       closeModal('settingsModal');
     };
     document.getElementById('exportBtn').onclick = exportBackup;
@@ -1686,7 +1766,8 @@
         state.password       = password;
         state.dailyGoalHours = goal;
       }
-      await saveProfile();
+      saveProfile();
+      await flushProfileSave(); // critical — flush immediately on first-time setup
       closeModal('onboardModal');
       render();
       if(state.groupCode) startGroupPolling();
@@ -1722,8 +1803,8 @@
       }
     }, 1000);
 
-    // Full render refresh every minute
-    setInterval(render, 60000);
+    // Full local render refresh every 5 minutes (pure DOM — no Supabase calls)
+    setInterval(render, 300000);
   }
 
   boot();
