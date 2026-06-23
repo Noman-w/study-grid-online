@@ -303,12 +303,15 @@
 
     <div class="sidebar-spacer"></div>
 
-    <div class="profile-pill" id="profilePill">
-      <div class="avatar" id="pillAvatar">—</div>
-      <div>
-        <div class="pname" id="pillName">—</div>
-        <div class="plevel" id="pillLevel">LV.1</div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <div class="profile-pill" id="profilePill" style="flex:1;min-width:0;">
+        <div class="avatar" id="pillAvatar">—</div>
+        <div style="min-width:0;">
+          <div class="pname" id="pillName">—</div>
+          <div class="plevel" id="pillLevel">LV.1</div>
+        </div>
       </div>
+      <button class="icon-btn" id="logoutBtn" title="Log out" style="flex-shrink:0;">⏏</button>
     </div>
   </aside>
 
@@ -648,11 +651,10 @@
     if(!groupCode) return;
     groupRealtimeChannel = sb.channel('room-'+groupCode)
       .on('postgres_changes', { event:'*', schema:'public', table:'studygrid_kv', filter:'key=eq.group:'+groupCode }, (payload) => {
-         if (payload.new && payload.new.value) {
-             onChange(payload.new.value);
-         } else {
-             onChange();
-         }
+         // payload.new.value is the JSONB column — a parsed JS object from Supabase.
+         // Always call onChange; pass the value if present, otherwise null so
+         // renderRoom falls back to fetchGroup() cleanly.
+         onChange(payload.new?.value ?? null);
       })
       .subscribe();
   };
@@ -1509,11 +1511,14 @@
     const today = localDateKey();
     state.dailyLog[today] = (state.dailyLog[today]||0)+hours;
 
-    await saveProfile();
+    // Flush profile to Supabase FIRST so cloud has updated totalHours/XP
+    // before syncGroupSelf writes the group blob. If the user closes the tab
+    // in the next few seconds, the profile write has already landed safely.
+    saveProfile();
+    await flushProfileSave();
     render();
-    // Flush immediately here since we need the result to pass to renderRoom
     const g = await _flushGroupSync();
-    renderRoom(g); // ← reuse the data syncGroupSelf already wrote/has, no extra GET
+    renderRoom(g);
 
     const newLevel     = getLevelInfo(state.totalXP).level;
     const newMilestone = Math.floor(state.totalHours/500);
@@ -1676,6 +1681,16 @@
       if(e.target.files&&e.target.files[0]) importBackup(e.target.files[0]);
       e.target.value='';
     };
+    document.getElementById('logoutBtn').onclick = async ()=>{
+      if(!confirm('Log out? Your progress stays saved in the cloud.')) return;
+      // Flush any pending writes before clearing local state
+      await flushProfileSave();
+      await flushPersistTimer();
+      // Clear localStorage only — Supabase data is untouched
+      try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+      location.reload();
+    };
+
     document.getElementById('resetDataBtn').onclick = async ()=>{
       if(!confirm('Clear all tracking data?')) return;
       try{ await window.storage.delete(STORAGE_KEY,false); }catch(e){}
@@ -1759,6 +1774,42 @@
         const saved = JSON.parse(cloudData.value);
         if(saved.password&&saved.password!==password){ alert('Incorrect password. Please try again.'); return; }
         state = Object.assign(state, saved);
+
+        // ── Recover sessions that landed in group blob but not in profile ────
+        // Safe approach: match by session TIMESTAMP, never by comparing totals.
+        // A session ts in recentLog that isn't in sessionHistory = lost session.
+        // Re-applying an already-known ts is a no-op so this is safe on every login.
+        if(state.groupCode){
+          try{
+            const groupRaw = await window.storage.get('group:'+state.groupCode, true);
+            if(groupRaw && groupRaw.value){
+              const group  = JSON.parse(groupRaw.value);
+              const member = group.members && group.members[state.id];
+              if(member && Array.isArray(member.recentLog)){
+                const knownTs = new Set((state.sessionHistory||[]).map(s=>s.ts));
+                const missing = member.recentLog.filter(s => s.ts && !knownTs.has(s.ts));
+                if(missing.length > 0){
+                  missing.forEach(s => {
+                    // Add the session entry — timestamp-gated so it can never duplicate
+                    state.sessionHistory = state.sessionHistory || [];
+                    state.sessionHistory.unshift({ ts:s.ts, hours:s.hours, note:s.note||'' });
+                    // Credit the hours and XP
+                    state.totalHours += s.hours;
+                    state.totalXP    += Math.round(s.hours * XP_PER_HOUR);
+                    const d = new Date(s.ts);
+                    const today = localDateKey();
+                    const dayKey = localDateKey(d);
+                    state.dailyLog = state.dailyLog || {};
+                    state.dailyLog[dayKey] = (state.dailyLog[dayKey]||0) + s.hours;
+                  });
+                  const totalRecovered = missing.reduce((sum,s)=>sum+s.hours, 0);
+                  showToast('Session recovered ✓', '+'+fmtHours(totalRecovered)+' restored from room data');
+                }
+              }
+            }
+          }catch(e){ console.warn('reconcile failed', e); }
+        }
+
         showToast('Cloud profile loaded','Welcome back, '+state.name+'!');
       } else {
         state.id             = uid(8);
@@ -1769,19 +1820,6 @@
       saveProfile();
       await flushProfileSave(); // critical — flush immediately on first-time setup
       closeModal('onboardModal');
-
-      // ── Restore timer NOW that state.id is available ─────────────────────
-      // boot() called loadPersistedTimer() too early (before the user logged
-      // in), so state.id was empty and the fetch was skipped.  Calling it
-      // again here — after the profile is fully loaded — gives instant timer
-      // restore on login with no refresh needed.
-      const hadTimer = await loadPersistedTimer();
-      if(hadTimer){
-        restoreTimerUI();
-      } else {
-        applyTimerUI();
-      }
-
       render();
       if(state.groupCode) startGroupPolling();
     };
@@ -1798,18 +1836,12 @@
       Notification.requestPermission();
     }
 
-    // ── Restore timer (only when already logged in from local storage) ──────
-    // If the user had to go through the login modal, loadPersistedTimer() is
-    // called inside the onboardSubmit handler instead (after state.id is set).
-    // Running it here covers the fast path: returning user whose profile was
-    // already in local storage so maybeOnboard() returned immediately.
-    if(state.id){
-      const hadTimer = await loadPersistedTimer();
-      if(hadTimer){
-        restoreTimerUI();
-      } else {
-        applyTimerUI();
-      }
+    // ── Restore any timer that was running/paused before page closed ──────
+    const hadTimer = await loadPersistedTimer();
+    if(hadTimer){
+      restoreTimerUI();
+    } else {
+      applyTimerUI();
     }
 
     // ── 1-second loop: countdown + extrapolated friend timers in roster ───
@@ -1825,6 +1857,13 @@
     // Full local render refresh every 5 minutes (pure DOM — no Supabase calls)
     setInterval(render, 300000);
   }
+
+  // Flush any pending debounced writes when the tab is closed.
+  // This is the last line of defence if a user closes within the debounce window.
+  window.addEventListener('beforeunload', () => {
+    if(typeof flushProfileSave === 'function') flushProfileSave();
+    if(typeof flushPersistTimer === 'function') flushPersistTimer();
+  });
 
   boot();
 })();
