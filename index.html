@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>STUDYGRID v.33</title>
+<title>STUDYGRID v.34</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght=500;600;700&family=JetBrains+Mono:wght=400;500;600;700&family=Inter:wght=400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -283,7 +283,7 @@
     <div class="sidebar-brand">
       <div class="brand-mark"></div>
       <div class="brand-text">
-        <span class="name">STUDYGRID v.33</span>
+        <span class="name">STUDYGRID v.34</span>
         <span class="tag">3000HR Mission Tracker</span>
       </div>
     </div>
@@ -1512,13 +1512,21 @@
     state.dailyLog[today] = (state.dailyLog[today]||0)+hours;
 
     // Flush profile to Supabase FIRST so cloud has updated totalHours/XP
-    // before syncGroupSelf writes the group blob. If the user closes the tab
+    // before the group blob is written. If the user closes the tab
     // in the next few seconds, the profile write has already landed safely.
     saveProfile();
     await flushProfileSave();
     render();
-    const g = await _flushGroupSync();
-    renderRoom(g);
+
+    // Always call _doGroupSync() directly here — never _flushGroupSync().
+    // _flushGroupSync() only works when _groupSyncTimer is pending, but logSubmit
+    // explicitly cancels that timer (to prevent a stale pre-save write), so
+    // _flushGroupSync() would return null and skip the write entirely.
+    // _doGroupSync() unconditionally writes the room blob with the latest state.
+    if(state.groupCode){
+      const g = await _doGroupSync();
+      if(g) renderRoom(g);
+    }
 
     const newLevel     = getLevelInfo(state.totalXP).level;
     const newMilestone = Math.floor(state.totalHours/500);
@@ -1557,7 +1565,9 @@
         await flushProfileSave(); // flush immediately for import (critical path)
         showToast('Backup restored','Historical tracking profile reloaded.');
         render();
-        if(state.groupCode){ await _flushGroupSync(); startGroupPolling(); }
+        // Use _doGroupSync() directly — import never sets a pending sync timer,
+        // so _flushGroupSync() would return null and skip the room update.
+        if(state.groupCode){ await _doGroupSync(); startGroupPolling(); }
       }catch(err){ alert('Invalid backup file.'); }
     };
     reader.readAsText(file);
@@ -1636,8 +1646,14 @@
       persistTimer();
       state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
       saveProfile(); render(); closeModal('logModal');
-      // Flush group sync immediately so roster updates now
-      if(state.groupCode) await _flushGroupSync();
+      // Force group sync immediately so roster reflects discarded state.
+      // Cancel any pending debounced timer first to avoid a double-write,
+      // then call _doGroupSync() directly (works even when no timer is pending).
+      if(state.groupCode){
+        if(_groupSyncTimer){ clearTimeout(_groupSyncTimer); _groupSyncTimer = null; _groupSyncResolvers.splice(0); }
+        const g = await _doGroupSync();
+        if(g) renderRoom(g);
+      }
     };
     document.getElementById('logSubmit').onclick = async ()=>{
       const hrs       = pendingTimerHours;
@@ -1645,9 +1661,13 @@
       if(!hrs||hrs<=0) return;
       closeModal('logModal');
       pendingTimerHours = null;
-      // Session is now saved — clear the cloud timer record immediately
-      timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
-      await flushPersistTimer(); // flush so the idle state hits Supabase right away
+
+      // Cancel any pending debounced group sync that fired from stopTimerAndLog.
+      // It would write the room blob BEFORE sessionHistory is finalized (race condition).
+      // We'll do one authoritative group sync at the end of this function instead.
+      if(_groupSyncTimer){ clearTimeout(_groupSyncTimer); _groupSyncTimer = null; _groupSyncResolvers.splice(0); }
+
+      // Finalize sessionHistory FIRST — convert the isLive placeholder into the real entry.
       const liveIdx = state.sessionHistory.findIndex(s=>s.isLive);
       if(liveIdx!==-1){
         const topic = state.sessionHistory[liveIdx].note;
@@ -1657,7 +1677,13 @@
           note : topic+(extraNote?' — '+extraNote:''),
         };
       }
-      await addStudyHoursRecord(hrs);
+
+      // NOW clear the cloud timer record — sessionHistory is already correct,
+      // so there is no window where a concurrent sync can write stale data.
+      timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
+      await flushPersistTimer(); // flush idle state to Supabase
+
+      await addStudyHoursRecord(hrs); // saves profile + flushes group sync with correct recentLog
     };
 
     /* settings */
@@ -1856,6 +1882,19 @@
 
     // Full local render refresh every 5 minutes (pure DOM — no Supabase calls)
     setInterval(render, 300000);
+
+    // Periodic group data re-fetch every 30 seconds.
+    // This is a hard fallback so the room always converges to the correct state
+    // even if a Supabase Realtime event is missed (network blip, reconnect lag, etc).
+    // _doGroupSync() is intentionally NOT called here — we only read, never write,
+    // on this passive refresh so we don't generate extra egress.
+    setInterval(async ()=>{
+      if(!state.groupCode) return;
+      try{
+        const g = await fetchGroup();
+        if(g){ cachedGroupData = g; renderRoom(g); }
+      }catch(e){ /* silent — realtime is still the primary path */ }
+    }, 30000);
   }
 
   // Flush any pending debounced writes when the tab is closed.
