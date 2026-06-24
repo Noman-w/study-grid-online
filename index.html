@@ -675,27 +675,19 @@
     {min:2,  max:3,  title:'Tor dhara hobe na'},
     {min:4,  max:4,  title:'Struggler'},
     {min:5,  max:5,  title:'Backbencher(tui mama onk funny)'},
-    {min:6,  max:6,  title:'Backshot lover'},
-    {min:7,  max:7,  title:'Tana Tani pass'},
-    {min:8,  max:8,  title:'Rifat Academy'},
-    {min:9,  max:9,  title:'Pass hoibo to?'},
-    {min:10, max:10, title:'Gorbito Chudvashian'},
-    {min:11, max:11, title:'BUET CSE or SUST CSE?'},
-    {min:12, max:12, title:'ACS Lover(tui asole gay)'},
-    {min:13, max:14, title:'Syllabus Sesh hoy nai?'},
-    {min:15, max:16, title:'NUET Slavery Dept. confirm'},
-    {min:17, max:18, title:'Khelowar balok'},
-    {min:19, max:21, title:'Asir bae'},
-    {min:22, max:23, title:'Anas bae'},
-    {min:24, max:26, title:'Tham bae'},
-    {min:27, max:30, title:'Medical Confirm'},
-    {min:31, max:33, title:'BUET 1st confirm'},
-    {min:34, max:37, title:'ALL BD Rank 0'},
-    {min:38, max:41, title:'Ostad'},
-    {min:42, max:45, title:'This is Elon Musk'},
-    {min:46, max:49, title:'MIT confirm'},
-    
-    {min:50, max:999,title:'Nicola Tesla'},
+    {min:6,  max:7,  title:'Backshot lover'},
+    {min:8,  max:9,  title:'Rifat Academy'},
+    {min:10, max:12, title:'BUET CSE or SUST CSE?'},
+    {min:13, max:14, title:'ACS Lover(tui asole gay)'},
+    {min:15, max:16, title:'Syllabus Sesh hoy nai?'},
+    {min:17, max:19, title:'NUET Slavery Dept. confirm'},
+    {min:20, max:24, title:'Asir bae'},
+    {min:25, max:29, title:'Anas bae'},
+    {min:30, max:35, title:'Tham bae'},
+    {min:36, max:39, title:'BUET 1st confirm'},
+    {min:40, max:44, title:'ALL BD Rank 0'},
+    {min:45, max:49, title:'MIT confirm'},
+    {min:50, max:999,title:'This is Elon Musk'},
   ];
 
   /* ── app state ──────────────────────────────────────────────────────────── */
@@ -1370,17 +1362,33 @@
 
     // ── Cross-browser timer sync ──────────────────────────────────────────
     // When a Realtime update arrives, check if the group blob has a newer
-    // timer record for OUR OWN user (written by another browser/device).
-    // If so, adopt it and refresh the main timer UI — this is what makes
-    // pause/resume/stop on one browser instantly show on all other browsers.
+    // timerRecord for OUR OWN user (written by another browser/device).
+    // Only adopt states that are strictly newer AND meaningfully different,
+    // to avoid accumulating stale accumulated_seconds from a previous session.
     if(state.id && group.members[state.id]){
       const remoteTimer = group.members[state.id].timerRecord;
       if(remoteTimer && remoteTimer.written_at){
         const remoteTs = new Date(remoteTimer.written_at).getTime();
         const localTs  = timerRecord.written_at ? new Date(timerRecord.written_at).getTime() : 0;
-        if(remoteTs > localTs){
+        if(remoteTs > localTs && remoteTimer.status !== timerRecord.status){
+          const prevStatus = timerRecord.status;
           timerRecord = { ...remoteTimer };
-          if(timerRecord.status === 'active'){ startTick(); } else { stopTick(); }
+
+          if(timerRecord.status === 'active'){
+            // Another browser started a new session — create the isLive placeholder
+            // if it doesn't already exist so stop/save works correctly here too.
+            if(!state.sessionHistory.find(s=>s.isLive)){
+              state.sessionHistory.unshift({ ts:Date.now(), hours:0, note:timerRecord.topic||'', isLive:true });
+            }
+            startTick();
+          } else if(timerRecord.status === 'paused'){
+            stopTick();
+          } else {
+            // idle — another browser stopped the session. Clear our isLive placeholder
+            // so we don't double-count if the user also had the session open here.
+            state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
+            stopTick();
+          }
           applyTimerUI();
         }
       }
@@ -1489,7 +1497,8 @@
 
   /* ── ADD STUDY HOURS ────────────────────────────────────────────────────── */
   async function addStudyHoursRecord(hours){
-    hours = Math.round(hours*100)/100;
+    // Round to nearest second only (not 36-second chunks)
+    hours = Math.round(hours * 3600) / 3600;
     if(hours<=0) return;
     const prevLevel     = getLevelInfo(state.totalXP).level;
     const prevMilestone = Math.floor(state.totalHours/500);
@@ -1769,9 +1778,9 @@
         state = Object.assign(state, saved);
 
         // ── Recover sessions that landed in group blob but not in profile ────
-        // Safe approach: match by session TIMESTAMP, never by comparing totals.
-        // A session ts in recentLog that isn't in sessionHistory = lost session.
-        // Re-applying an already-known ts is a no-op so this is safe on every login.
+        // Only sessions whose ts is not known AND whose hours aren't already
+        // accounted for in totalHours are recovered. We compare against the
+        // profile's totalHours to avoid stacking hours that were already saved.
         if(state.groupCode){
           try{
             const groupRaw = await window.storage.get('group:'+state.groupCode, true);
@@ -1780,23 +1789,32 @@
               const member = group.members && group.members[state.id];
               if(member && Array.isArray(member.recentLog)){
                 const knownTs = new Set((state.sessionHistory||[]).map(s=>s.ts));
-                const missing = member.recentLog.filter(s => s.ts && !knownTs.has(s.ts));
+                // A session is only "missing" if its ts is unknown AND it is not
+                // an isLive ghost (hours===0). Never recover zero-hour entries.
+                const missing = member.recentLog.filter(s => s.ts && s.hours > 0 && !knownTs.has(s.ts));
                 if(missing.length > 0){
+                  // Cross-check: the profile totalHours already includes these if
+                  // the profile was saved after the session. Only credit hours that
+                  // would genuinely be lost (i.e. profile totalHours < group total).
+                  const groupTotal = missing.reduce((sum,s)=>sum+s.hours, 0);
+                  const profileTotal = state.totalHours || 0;
+                  // Sum of all known session hours in profile history
+                  const knownTotal = (state.sessionHistory||[]).filter(s=>!s.isLive).reduce((sum,s)=>sum+(s.hours||0), 0);
                   missing.forEach(s => {
-                    // Add the session entry — timestamp-gated so it can never duplicate
                     state.sessionHistory = state.sessionHistory || [];
                     state.sessionHistory.unshift({ ts:s.ts, hours:s.hours, note:s.note||'' });
-                    // Credit the hours and XP
-                    state.totalHours += s.hours;
-                    state.totalXP    += Math.round(s.hours * XP_PER_HOUR);
-                    const d = new Date(s.ts);
-                    const today = localDateKey();
-                    const dayKey = localDateKey(d);
-                    state.dailyLog = state.dailyLog || {};
-                    state.dailyLog[dayKey] = (state.dailyLog[dayKey]||0) + s.hours;
+                    // Only add to totals if profile totalHours doesn't already reflect this
+                    // (i.e. profile was saved before the session was written to group blob)
+                    const alreadyCounted = profileTotal >= knownTotal + s.hours;
+                    if(!alreadyCounted){
+                      state.totalHours += s.hours;
+                      state.totalXP    += Math.round(s.hours * XP_PER_HOUR);
+                      const dayKey = localDateKey(new Date(s.ts));
+                      state.dailyLog = state.dailyLog || {};
+                      state.dailyLog[dayKey] = (state.dailyLog[dayKey]||0) + s.hours;
+                    }
                   });
-                  const totalRecovered = missing.reduce((sum,s)=>sum+s.hours, 0);
-                  showToast('Session recovered ✓', '+'+fmtHours(totalRecovered)+' restored from room data');
+                  showToast('Session recovered ✓', 'Room log synced on login');
                 }
               }
             }
