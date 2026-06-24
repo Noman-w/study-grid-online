@@ -913,8 +913,9 @@
     topicEl.value    = '';
     applyTimerUI();
 
-    const hrs = Math.round((elapsedMs/3600000)*100)/100;
-    if(hrs < (30/3600)){
+    // Store raw milliseconds — convert to hours only at the moment of saving.
+    // Storing as rounded hours (2dp) loses up to 36 seconds per session.
+    if(elapsedMs < 30000){
       // < 30 seconds: silently discard
       state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
       saveProfile();
@@ -923,7 +924,7 @@
       return;
     }
 
-    pendingTimerHours = hrs;
+    pendingTimerHours = elapsedMs; // stored as ms, converted to hours on save
     document.getElementById('logTimeBadge').textContent = fmtClock(elapsedMs);
     document.getElementById('logNoteInput').value = '';
     openModal('logModal');
@@ -1640,11 +1641,14 @@
       if(state.groupCode) await syncGroupSelf();
     };
     document.getElementById('logSubmit').onclick = async ()=>{
-      const hrs       = pendingTimerHours;
+      const elapsedMs = pendingTimerHours; // stored as raw ms since last fix
       const extraNote = document.getElementById('logNoteInput').value.trim();
-      if(!hrs||hrs<=0) return;
+      if(!elapsedMs||elapsedMs<=0) return;
       closeModal('logModal');
       pendingTimerHours = null;
+
+      // Convert ms → hours at the last possible moment, rounded to nearest second
+      const hrs = Math.round(elapsedMs / 1000) / 3600;
 
       // Finalize sessionHistory — convert the isLive placeholder into the real entry.
       const liveIdx = state.sessionHistory.findIndex(s=>s.isLive);
