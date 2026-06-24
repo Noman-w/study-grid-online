@@ -925,7 +925,7 @@
 
     pendingTimerHours = hrs;
     document.getElementById('logTimeBadge').textContent = fmtClock(elapsedMs);
-    document.getElementById('logNoteInput').value = stoppedTopic;
+    document.getElementById('logNoteInput').value = '';
     openModal('logModal');
     if(state.groupCode) await syncGroupSelf();
   }
