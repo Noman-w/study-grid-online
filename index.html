@@ -802,16 +802,23 @@
 
   function timerCloudKey(){ return 'timer:'+state.id; }
 
-  /** Write current timerRecord to Supabase immediately. No debounce. */
+  /** Write current timerRecord to Supabase immediately. No debounce.
+   * Always stamps `written_at` so peers can detect stale timer entries. */
   async function persistTimer(){
     if(!state.id || !sb) return;
-    await window.storage.set(timerCloudKey(), JSON.stringify(timerRecord), true);
+    const payload = { ...timerRecord, written_at: new Date().toISOString() };
+    await window.storage.set(timerCloudKey(), JSON.stringify(payload), true);
   }
   async function flushPersistTimer(){ await persistTimer(); }
 
   /**
    * On boot: fetch the persisted timer state from Supabase.
    * Returns true if an active/paused session was recovered.
+   *
+   * STALENESS GUARD: If the persisted record claims to be active/paused but
+   * has no `written_at`, or `written_at` is older than 24 hours with no
+   * `started_at` (i.e. the app never cleanly wrote it), we treat it as idle.
+   * This prevents ghost-online states after manual DB resets or tab crashes.
    */
   async function loadPersistedTimer(){
     if(!state.id) return false;
@@ -820,6 +827,22 @@
       if(r && r.value){
         const saved = JSON.parse(r.value);
         if(saved && (saved.status==='active'||saved.status==='paused')){
+          // Staleness check: a paused record with no written_at timestamp is
+          // untrustworthy (pre-fix legacy data). Reject it to avoid ghost-online.
+          const writtenAt = saved.written_at ? new Date(saved.written_at).getTime() : 0;
+          const ageMs = Date.now() - writtenAt;
+          // If the timer says active but started_at is missing → corrupt, discard.
+          if(saved.status === 'active' && !saved.started_at){
+            console.warn('STUDYGRID: discarding corrupt active timer (no started_at)');
+            await persistTimer(); // write idle
+            return false;
+          }
+          // If data is older than 24 h and has no valid started_at anchor → discard.
+          if(ageMs > 86400000 && !saved.started_at){
+            console.warn('STUDYGRID: discarding stale paused timer (>24h, no anchor)');
+            await persistTimer(); // write idle
+            return false;
+          }
           timerRecord = saved;
           return true;
         }
@@ -999,13 +1022,11 @@
     setTimeout(()=>{ banner.style.display='none'; }, 7000);
   }
 
-  /* ── PRESENCE (NO BACKGROUND HEARTBEAT) ────────────────────────────────────
-     There is intentionally no interval/timer that pings Supabase. `lastActive`
-     is only ever written by syncGroupSelf(), which itself is only called from
-     real user actions (start/pause/resume/stop timer, send chat, share a
-     resource, save settings, log a session). That single write is what
-     drives `lastActive` in the roster — nothing polls or re-checks on a
-     schedule. This is the only thing keeping egress bounded on the Free Plan.
+  /* ── PRESENCE ───────────────────────────────────────────────────────────────
+     There is no heartbeat or online/offline concept. Timer state IS presence:
+     syncGroupSelf() is called from real user actions (start/pause/resume/stop
+     timer, send chat, share a resource, save settings, log a session).
+     The group blob is updated on each action — no polling, no background pings.
      ══════════════════════════════════════════════════════════════════════════ */
 
   /* ── STORAGE ────────────────────────────────────────────────────────────── */
@@ -1072,8 +1093,7 @@
         title         : lvl.title,
         todayHours    : state.dailyLog[today]||0,
         dailyGoalHours: state.dailyGoalHours,
-        lastActive    : Date.now(),
-        timerRecord   : { ...timerRecord },
+        timerRecord   : { ...timerRecord, written_at: new Date().toISOString() },
         recentLog     : (state.sessionHistory||[]).filter(s=>!s.isLive).slice(0,5)
                           .map(s=>({ ts:s.ts, hours:s.hours, note:(s.note||'').slice(0,200) })),
       };
@@ -1278,38 +1298,32 @@
       const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
       const mPct      = clamp((m.totalHours/GOAL_TOTAL)*100,0,100);
 
-      /* For the current user's own row, always use the live in-memory timerRecord
-       * so the room and the main timer are always perfectly in sync.
-       * For other members, use whatever their last group-blob write contains. */
+      /* Timer record: for own row use live in-memory state (always accurate).
+       * For peers use whatever the group blob last stored — the timer state
+       * IS the truth, no online/offline concept at all. */
       const tr = (m.id === state.id) ? timerRecord : (m.timerRecord || {});
 
-      /* Online/offline logic:
-       * - If timer is ACTIVE or PAUSED → always show as online/active,
-       * regardless of whether the browser is open (timer persists in Supabase).
-       * - Only show as offline when timer is idle AND heartbeat is stale (> 90 s).
-       */
-      const msSince  = m.lastActive ? Date.now()-m.lastActive : 99999999;
-      const heartbeatAlive = msSince <= 90000;
-      const timerRunning   = tr.status === 'active' || tr.status === 'paused';
-      const isOnline = heartbeatAlive || timerRunning;
-
-      let dotClass    = isOnline ? 'online' : '';   // '' = grey (offline)
+      /* Display is driven purely by timer status. No heartbeat, no online/offline.
+       * active  → running clock (teal)
+       * paused  → banked time shown (amber)
+       * idle    → show today's logged hours, or total hours if nothing today */
+      let dotClass    = '';
       let runtimeHtml = '';
 
-      if(tr.status==='active' && tr.started_at){
+      if(tr.status === 'active' && tr.started_at){
         const accMs   = (tr.accumulated_seconds||0)*1000;
-        const segMs   = Date.now()-new Date(tr.started_at).getTime();
-        const totalMs = Math.max(0, accMs+segMs);
+        const segMs   = Date.now() - new Date(tr.started_at).getTime();
+        const totalMs = Math.max(0, accMs + segMs);
         dotClass    = 'online';
         runtimeHtml = `<span style="color:var(--teal);font-weight:600;">▶ ${escapeHtml(tr.topic||'Studying')} &nbsp;${fmtClock(totalMs)}</span>`;
-      } else if(tr.status==='paused'){
+      } else if(tr.status === 'paused'){
         dotClass    = 'paused-dot';
         const accMs = (tr.accumulated_seconds||0)*1000;
         runtimeHtml = `<span style="color:var(--amber);">⏸ Paused &nbsp;${escapeHtml(tr.topic||'')} &nbsp;(${fmtClock(accMs)} banked)</span>`;
-      } else if(isOnline){
-        runtimeHtml = m.todayHours>0 ? `Logged ${fmtHours(m.todayHours)} today` : 'Online · idle';
       } else {
-        runtimeHtml = `<span style="color:var(--muted-dim);">Offline</span>`;
+        runtimeHtml = m.todayHours > 0
+          ? `Logged ${fmtHours(m.todayHours)} today`
+          : `${fmtHours(m.totalHours)} total`;
       }
 
       row.innerHTML = `
@@ -1796,6 +1810,13 @@
     } else {
       applyTimerUI();
     }
+    // Sync the group blob immediately after boot so the room reflects the
+    // real timer state (idle or recovered). Without this, there's a window
+    // between boot and the first user action where the group blob shows
+    // stale data from the previous session.
+    if(state.groupCode){
+      try{ await syncGroupSelf(); }catch(e){}
+    }
 
     // ── Eagerly load group data so the roster is populated immediately on boot ──
     // Without this, cachedGroupData is null until startGroupPolling fires its
@@ -1836,13 +1857,22 @@
 
   // Flush any pending debounced writes when the tab is closed.
   // This is the last line of defence if a user closes within the debounce window.
-  // NOTE: We intentionally do NOT flush the group sync here. Doing so would
-  // write timerRecord:{status:'idle'} to the group blob mid-session whenever
-  // the tab is reloaded, making all friends appear stopped on everyone else's roster.
-  // The group blob converges correctly via the 30-second passive fetch instead.
+  //
+  // GROUP SYNC ON CLOSE: We intentionally flush the group sync here ONLY when
+  // the timer is idle (the user already stopped before closing). This ensures
+  // that the group blob shows status:'idle' immediately so peers don't see a
+  // ghost-online entry. If the timer is still active/paused when the tab closes,
+  // we do NOT write the group blob (the active timer record already reflects the
+  // correct state, and overwriting would cause a race with the timer persistence).
   window.addEventListener('beforeunload', () => {
     if(typeof flushProfileSave  === 'function') flushProfileSave();
     if(typeof flushPersistTimer === 'function') flushPersistTimer();
+    // Sync idle state to the group blob so peers stop seeing us as online
+    if(timerRecord.status === 'idle' && state.groupCode){
+      // Fire-and-forget: beforeunload is synchronous, we can't await,
+      // but modern browsers will let in-flight fetch() complete for a few seconds.
+      _doGroupSync().catch(()=>{});
+    }
   });
 
   boot();
