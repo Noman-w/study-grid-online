@@ -1841,18 +1841,10 @@
     // Full local render refresh every 5 minutes (pure DOM — no Supabase calls)
     setInterval(render, 300000);
 
-    // Periodic group data re-fetch every 30 seconds.
-    // This is a hard fallback so the room always converges to the correct state
-    // even if a Supabase Realtime event is missed (network blip, reconnect lag, etc).
-    // _doGroupSync() is intentionally NOT called here — we only read, never write,
-    // on this passive refresh so we don't generate extra egress.
-    setInterval(async ()=>{
-      if(!state.groupCode) return;
-      try{
-        const g = await fetchGroup();
-        if(g){ cachedGroupData = g; renderRoom(g); }
-      }catch(e){ /* silent — realtime is still the primary path */ }
-    }, 30000);
+    // Supabase Realtime is the primary update path (subscribed in startGroupPolling).
+    // No background polling interval — every group update arrives via the websocket,
+    // and user actions (start/pause/stop/chat) call syncGroupSelf() directly.
+    // This keeps egress minimal on the free plan.
   }
 
   // Flush any pending debounced writes when the tab is closed.
