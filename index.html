@@ -1787,6 +1787,12 @@
       saveProfile();
       await flushProfileSave(); // critical — flush immediately on first-time setup
       closeModal('onboardModal');
+      // Restore timer from server NOW — state.id is valid after cloud profile load.
+      // This is the key fix: on a fresh browser, loadPersistedTimer() must run
+      // AFTER the profile is fetched, not before (boot() runs before login completes).
+      const hadTimer = await loadPersistedTimer();
+      if(hadTimer){ restoreTimerUI(); } else { applyTimerUI(); }
+      if(state.groupCode){ try{ await syncGroupSelf(); }catch(e){} }
       render();
       if(state.groupCode) startGroupPolling();
     };
@@ -1803,19 +1809,15 @@
       Notification.requestPermission();
     }
 
-    // ── Restore any timer that was running/paused before page closed ──────
-    const hadTimer = await loadPersistedTimer();
-    if(hadTimer){
-      restoreTimerUI();
-    } else {
-      applyTimerUI();
-    }
-    // Sync the group blob immediately after boot so the room reflects the
-    // real timer state (idle or recovered). Without this, there's a window
-    // between boot and the first user action where the group blob shows
-    // stale data from the previous session.
-    if(state.groupCode){
-      try{ await syncGroupSelf(); }catch(e){}
+    // ── Restore timer (returning user who has localStorage) ───────────────
+    // For fresh-browser logins, this block is skipped (state.id is null here
+    // because maybeOnboard() returns before the user clicks submit — the timer
+    // restore runs inside onboardSubmit above instead, after the cloud profile
+    // is fetched and state.id is known).
+    if(state.id){
+      const hadTimer = await loadPersistedTimer();
+      if(hadTimer){ restoreTimerUI(); } else { applyTimerUI(); }
+      if(state.groupCode){ try{ await syncGroupSelf(); }catch(e){} }
     }
 
     // ── Eagerly load group data so the roster is populated immediately on boot ──
