@@ -1872,6 +1872,16 @@
       applyTimerUI();
     }
 
+    // ── Eagerly load group data so the roster is populated immediately on boot ──
+    // Without this, cachedGroupData is null until startGroupPolling fires its
+    // async renderRoom, causing a blank roster during the first few seconds.
+    if(state.groupCode){
+      try{
+        const g = await fetchGroup();
+        if(g) cachedGroupData = g;
+      }catch(e){}
+    }
+
     // ── 1-second loop: countdown + extrapolated friend timers in roster ───
     setInterval(()=>{
       renderCountdown();
@@ -1901,10 +1911,13 @@
 
   // Flush any pending debounced writes when the tab is closed.
   // This is the last line of defence if a user closes within the debounce window.
+  // NOTE: We intentionally do NOT flush the group sync here. Doing so would
+  // write timerRecord:{status:'idle'} to the group blob mid-session whenever
+  // the tab is reloaded, making all friends appear stopped on everyone else's roster.
+  // The group blob converges correctly via the 30-second passive fetch instead.
   window.addEventListener('beforeunload', () => {
     if(typeof flushProfileSave  === 'function') flushProfileSave();
     if(typeof flushPersistTimer === 'function') flushPersistTimer();
-    if(typeof _flushGroupSync   === 'function') _flushGroupSync();
   });
 
   boot();
