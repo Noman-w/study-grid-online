@@ -1332,8 +1332,10 @@
       const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
       const mPct      = clamp((m.totalHours/GOAL_TOTAL)*100,0,100);
 
-      /* Live timer extrapolated from the persisted timerRecord */
-      const tr = m.timerRecord || {};
+      /* For the current user's own row, always use the live in-memory timerRecord
+       * so the room and the main timer are always perfectly in sync.
+       * For other members, use whatever their last group-blob write contains. */
+      const tr = (m.id === state.id) ? timerRecord : (m.timerRecord || {});
 
       /* Online/offline logic:
        * - If timer is ACTIVE or PAUSED → always show as online/active,
@@ -1900,8 +1902,9 @@
   // Flush any pending debounced writes when the tab is closed.
   // This is the last line of defence if a user closes within the debounce window.
   window.addEventListener('beforeunload', () => {
-    if(typeof flushProfileSave === 'function') flushProfileSave();
+    if(typeof flushProfileSave  === 'function') flushProfileSave();
     if(typeof flushPersistTimer === 'function') flushPersistTimer();
+    if(typeof _flushGroupSync   === 'function') _flushGroupSync();
   });
 
   boot();
