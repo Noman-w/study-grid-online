@@ -851,11 +851,14 @@
 
     timerRecord = {
       status             : 'active',
-      started_at         : new Date().toISOString(),   // ← server-style ISO timestamp
+      started_at         : new Date().toISOString(),
       accumulated_seconds: 0,
       topic,
     };
-    persistTimer(); // async, don't await – keeps UI snappy
+    // Flush immediately on start — this is a critical write.
+    // If we use the debounced persistTimer() and the user reloads within 1.5s,
+    // the cloud key is still 'idle' and the session is lost on restore.
+    flushPersistTimer();
 
     // Live placeholder in session history
     state.sessionHistory.unshift({ ts:Date.now(), hours:0, note:topic, isLive:true });
@@ -1024,7 +1027,8 @@
       }
     } else if(timerRecord.status==='paused'){
       banner.className = 'restore-banner paused-banner';
-      banner.textContent = '↩ Paused session restored: "'+timerRecord.topic+'" ('+fmtClock(getElapsedMs())+' banked). Hit Resume to continue.';
+      const bankedMs = (timerRecord.accumulated_seconds||0)*1000;
+      banner.textContent = '↩ Paused session restored: "'+timerRecord.topic+'" ('+fmtClock(bankedMs)+' banked). Hit Resume to continue or Stop to save.';
       banner.style.display = 'block';
       document.getElementById('preSessionTopic').disabled = true;
     }
