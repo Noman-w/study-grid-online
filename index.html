@@ -1360,6 +1360,24 @@
       return;
     }
 
+    // ── Cross-browser timer sync ──────────────────────────────────────────
+    // When a Realtime update arrives, check if the group blob has a newer
+    // timer record for OUR OWN user (written by another browser/device).
+    // If so, adopt it and refresh the main timer UI — this is what makes
+    // pause/resume/stop on one browser instantly show on all other browsers.
+    if(state.id && group.members[state.id]){
+      const remoteTimer = group.members[state.id].timerRecord;
+      if(remoteTimer && remoteTimer.written_at){
+        const remoteTs = new Date(remoteTimer.written_at).getTime();
+        const localTs  = timerRecord.written_at ? new Date(timerRecord.written_at).getTime() : 0;
+        if(remoteTs > localTs){
+          timerRecord = { ...remoteTimer };
+          if(timerRecord.status === 'active'){ startTick(); } else { stopTick(); }
+          applyTimerUI();
+        }
+      }
+    }
+
     runRosterDOMEngine(group);
 
     /* chat ── left/right bubbles + smart-scroll + toast notifications */
