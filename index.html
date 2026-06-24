@@ -802,27 +802,12 @@
 
   function timerCloudKey(){ return 'timer:'+state.id; }
 
-  /** Write current timerRecord to Supabase.
-   * Fire-and-forget on the fast path; debounced so rapid state transitions
-   * (e.g. pause → stop within 1 second) don't each fire a separate network
-   * round-trip.  The 1.5-second window is short enough that the record is
-   * always up-to-date when a friend's roster next refreshes.               */
-  let _persistTimerHandle = null;
-  function persistTimer(){
-    if(!state.id || !sb) return;
-    if(_persistTimerHandle) clearTimeout(_persistTimerHandle);
-    _persistTimerHandle = setTimeout(async ()=>{
-      _persistTimerHandle = null;
-      await window.storage.set(timerCloudKey(), JSON.stringify(timerRecord), true);
-    }, 1500);
-  }
-
-  /** Flush timer persist immediately (used at stop/log time). */
-  async function flushPersistTimer(){
-    if(_persistTimerHandle){ clearTimeout(_persistTimerHandle); _persistTimerHandle = null; }
+  /** Write current timerRecord to Supabase immediately. No debounce. */
+  async function persistTimer(){
     if(!state.id || !sb) return;
     await window.storage.set(timerCloudKey(), JSON.stringify(timerRecord), true);
   }
+  async function flushPersistTimer(){ await persistTimer(); }
 
   /**
    * On boot: fetch the persisted timer state from Supabase.
@@ -855,18 +840,16 @@
       accumulated_seconds: 0,
       topic,
     };
-    // Flush immediately on start — this is a critical write.
-    // If we use the debounced persistTimer() and the user reloads within 1.5s,
-    // the cloud key is still 'idle' and the session is lost on restore.
-    flushPersistTimer();
+    // Flush immediately — no debounce, no fire-and-forget.
+    await persistTimer();
 
     // Live placeholder in session history
     state.sessionHistory.unshift({ ts:Date.now(), hours:0, note:topic, isLive:true });
-    saveProfile(); // debounced cloud write — will fire ~4s later
+    saveProfile();
 
     startTick();
     applyTimerUI();
-    syncGroupSelf(); // debounced — collapses with any rapid follow-up calls
+    await syncGroupSelf();
   }
 
   /* ── PAUSE ──────────────────────────────────────────────────────────────── */
@@ -876,20 +859,20 @@
     timerRecord.started_at          = null;
     timerRecord.status              = 'paused';
     stopTick();
-    persistTimer();
+    await persistTimer();
     applyTimerUI();
-    syncGroupSelf();
+    await syncGroupSelf();
   }
 
   /* ── RESUME ─────────────────────────────────────────────────────────────── */
   async function resumeTimer(){
     if(timerRecord.status!=='paused') return;
-    timerRecord.started_at = new Date().toISOString();  // new segment start
+    timerRecord.started_at = new Date().toISOString();
     timerRecord.status     = 'active';
-    persistTimer();
+    await persistTimer();
     startTick();
     applyTimerUI();
-    syncGroupSelf();
+    await syncGroupSelf();
   }
 
   /* ── STOP ───────────────────────────────────────────────────────────────── */
@@ -898,49 +881,30 @@
     const stoppedTopic = timerRecord.topic;
     stopTick();
 
-    // Push a frozen "paused" snapshot to the cloud so the member stays visible
-    // in the room roster while the save modal is open.  Use flush so it goes
-    // out immediately — the log modal is about to open.
-    const cloudSnapshot = {
-      status              : 'paused',
-      started_at          : null,
-      accumulated_seconds : Math.floor(elapsedMs/1000),
-      topic               : stoppedTopic,
-    };
-    if(state.id && sb){
-      // Override the timerRecord briefly to write the snapshot, then restore
-      const _prev = timerRecord;
-      timerRecord = cloudSnapshot;
-      await flushPersistTimer();
-      timerRecord = _prev;
-    }
-
-    // Local record → idle (drives UI only)
+    // Go idle immediately — timer is done.
     timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
+    await persistTimer();
 
     const topicEl = document.getElementById('preSessionTopic');
     topicEl.disabled = false;
     topicEl.value    = '';
-
     applyTimerUI();
 
     const hrs = Math.round((elapsedMs/3600000)*100)/100;
     if(hrs < (30/3600)){
-      // < 30 seconds: silently discard — clear the cloud record too
-      if(state.id && sb){
-        await flushPersistTimer(); // timerRecord is already idle at this point
-      }
+      // < 30 seconds: silently discard
       state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
       saveProfile();
+      if(state.groupCode) await syncGroupSelf();
       render();
       return;
     }
 
     pendingTimerHours = hrs;
     document.getElementById('logTimeBadge').textContent = fmtClock(elapsedMs);
-    document.getElementById('logNoteInput').value = '';
+    document.getElementById('logNoteInput').value = stoppedTopic;
     openModal('logModal');
-    if(state.groupCode) syncGroupSelf();
+    if(state.groupCode) await syncGroupSelf();
   }
 
   /* ── TICK (display only) ────────────────────────────────────────────────── */
@@ -1086,15 +1050,6 @@
   }
 
   /* ── GROUP SYNC ─────────────────────────────────────────────────────────── */
-  /* syncGroupSelf — debounced so that actions that fire in quick succession
-   * (e.g. stopTimer → persistTimer → syncGroupSelf all at once) produce only
-   * ONE Supabase GET + SET pair instead of several.  The returned promise
-   * resolves with the latest group data once the write actually fires.
-   * For callers that immediately need the return value (addStudyHoursRecord),
-   * the debounce is flushed synchronously via _flushGroupSync().            */
-  let _groupSyncTimer = null;
-  let _groupSyncResolvers = [];
-
   async function _doGroupSync(){
     if(!state.groupCode) return null;
     const key = 'group:'+state.groupCode;
@@ -1128,30 +1083,17 @@
     }catch(e){ console.error('group sync failed', e); return null; }
   }
 
-  function syncGroupSelf(){
-    return new Promise(resolve=>{
-      if(!state.groupCode){ resolve(null); return; }
-      _groupSyncResolvers.push(resolve);
-      if(_groupSyncTimer) clearTimeout(_groupSyncTimer);
-      _groupSyncTimer = setTimeout(async ()=>{
-        _groupSyncTimer = null;
-        const resolvers = _groupSyncResolvers.splice(0);
-        const result = await _doGroupSync();
-        resolvers.forEach(r => r(result));
-      }, 2000); // 2-second debounce window
-    });
+  /* syncGroupSelf — immediate, no debounce. Every action writes to the group
+   * blob right away so the room is always in sync with the main timer. */
+  async function syncGroupSelf(){
+    if(!state.groupCode) return null;
+    const g = await _doGroupSync();
+    if(g){ cachedGroupData = g; renderRoom(g); }
+    return g;
   }
 
-  /* Flush immediately — used when callers need the result right away */
-  async function _flushGroupSync(){
-    if(!_groupSyncTimer) return null;
-    clearTimeout(_groupSyncTimer);
-    _groupSyncTimer = null;
-    const resolvers = _groupSyncResolvers.splice(0);
-    const result = await _doGroupSync();
-    resolvers.forEach(r => r(result));
-    return result;
-  }
+  /* _flushGroupSync kept as alias for any remaining call sites. */
+  async function _flushGroupSync(){ return syncGroupSelf(); }
 
   async function fetchGroup(){
     if(!state.groupCode) return null;
@@ -1524,11 +1466,6 @@
     await flushProfileSave();
     render();
 
-    // Always call _doGroupSync() directly here — never _flushGroupSync().
-    // _flushGroupSync() only works when _groupSyncTimer is pending, but logSubmit
-    // explicitly cancels that timer (to prevent a stale pre-save write), so
-    // _flushGroupSync() would return null and skip the write entirely.
-    // _doGroupSync() unconditionally writes the room blob with the latest state.
     if(state.groupCode){
       const g = await _doGroupSync();
       if(g) renderRoom(g);
@@ -1647,19 +1584,11 @@
     /* log modal */
     document.getElementById('logCancel').onclick = async ()=>{
       pendingTimerHours = null;
-      // User discarded — now clear the cloud timer record
       timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
-      persistTimer();
+      await persistTimer();
       state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
       saveProfile(); render(); closeModal('logModal');
-      // Force group sync immediately so roster reflects discarded state.
-      // Cancel any pending debounced timer first to avoid a double-write,
-      // then call _doGroupSync() directly (works even when no timer is pending).
-      if(state.groupCode){
-        if(_groupSyncTimer){ clearTimeout(_groupSyncTimer); _groupSyncTimer = null; _groupSyncResolvers.splice(0); }
-        const g = await _doGroupSync();
-        if(g) renderRoom(g);
-      }
+      if(state.groupCode) await syncGroupSelf();
     };
     document.getElementById('logSubmit').onclick = async ()=>{
       const hrs       = pendingTimerHours;
@@ -1668,12 +1597,7 @@
       closeModal('logModal');
       pendingTimerHours = null;
 
-      // Cancel any pending debounced group sync that fired from stopTimerAndLog.
-      // It would write the room blob BEFORE sessionHistory is finalized (race condition).
-      // We'll do one authoritative group sync at the end of this function instead.
-      if(_groupSyncTimer){ clearTimeout(_groupSyncTimer); _groupSyncTimer = null; _groupSyncResolvers.splice(0); }
-
-      // Finalize sessionHistory FIRST — convert the isLive placeholder into the real entry.
+      // Finalize sessionHistory — convert the isLive placeholder into the real entry.
       const liveIdx = state.sessionHistory.findIndex(s=>s.isLive);
       if(liveIdx!==-1){
         const topic = state.sessionHistory[liveIdx].note;
@@ -1684,12 +1608,9 @@
         };
       }
 
-      // NOW clear the cloud timer record — sessionHistory is already correct,
-      // so there is no window where a concurrent sync can write stale data.
       timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
-      await flushPersistTimer(); // flush idle state to Supabase
-
-      await addStudyHoursRecord(hrs); // saves profile + flushes group sync with correct recentLog
+      await flushPersistTimer();
+      await addStudyHoursRecord(hrs);
     };
 
     /* settings */
