@@ -1101,6 +1101,7 @@
         level         : lvl.level,
         title         : lvl.title,
         todayHours    : state.dailyLog[today]||0,
+        daysActive    : Math.max(1, Object.keys(state.dailyLog).length),
         dailyGoalHours: state.dailyGoalHours,
         timerRecord   : { ...timerRecord, written_at: new Date().toISOString() },
         recentLog     : (state.sessionHistory||[]).filter(s=>!s.isLive).slice(0,5)
@@ -1306,6 +1307,7 @@
       row.className   = 'roster-row'+(m.id===state.id?' me':'');
       const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
       const mPct      = clamp((m.totalHours/GOAL_TOTAL)*100,0,100);
+      const mAvg      = m.totalHours / (m.daysActive||1);
 
       /* Timer record: for own row use live in-memory state (always accurate).
        * For peers use whatever the group blob last stored — the timer state
@@ -1342,7 +1344,7 @@
           <div class="r-name">${escapeHtml(m.name)} ${m.id===state.id?'<span class="you-tag">YOU</span>':''}</div>
           <div class="r-meta">${runtimeHtml} &nbsp;·&nbsp; Lv.${m.level||1} ${escapeHtml(m.title||'')}</div>
           <div class="r-bar" title="${mPct.toFixed(1)}% to 3000 h goal"><div class="r-bar-fill" style="width:${mPct}%;"></div></div>
-          <div style="font-size:9.5px;color:var(--muted-dim);font-family:'JetBrains Mono',monospace;margin-top:3px;">${fmtHours(m.totalHours)} / 3000:00:00 · ${mPct.toFixed(1)}%</div>
+          <div style="font-size:9.5px;color:var(--muted-dim);font-family:'JetBrains Mono',monospace;margin-top:3px;">${fmtHours(m.totalHours)} / 3000:00:00 · ${mPct.toFixed(1)}% · ${fmtHours(mAvg)}/day</div>
         </div>
         <div class="r-hours mono">${fmtHours(m.totalHours)}</div>
       `;
