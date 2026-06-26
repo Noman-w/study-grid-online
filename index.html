@@ -30,7 +30,6 @@
     background-image:linear-gradient(var(--line-soft) 1px,transparent 1px),linear-gradient(90deg,var(--line-soft) 1px,transparent 1px);
     background-size:32px 32px;background-position:center top;min-height:100vh;
   }
-  body.modal-open{overflow:hidden;}
   .mono{font-family:'JetBrains Mono',monospace;font-feature-settings:"tnum";}
   .display{font-family:'Space Grotesk',sans-serif;}
   .app{max-width:1180px;margin:0 auto;padding:20px 20px 100px;}
@@ -287,6 +286,8 @@
 </style>
 </head>
 <body>
+<!-- ── PARTICLE CANVAS ── -->
+<canvas id="pcvs" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;"></canvas>
 <button class="sidebar-toggle" id="sidebarToggle" title="Menu">☰</button>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
@@ -1555,8 +1556,8 @@
   }
 
   /* ── MODALS ─────────────────────────────────────────────────────────────── */
-  function openModal(id){ document.getElementById(id).classList.add('show'); document.body.classList.add('modal-open'); }
-  function closeModal(id){ document.getElementById(id).classList.remove('show'); if(!document.querySelector('.modal-bg.show')) document.body.classList.remove('modal-open'); }
+  function openModal(id){ document.getElementById(id).classList.add('show'); }
+  function closeModal(id){ document.getElementById(id).classList.remove('show'); }
 
   /* ── BACKUP ─────────────────────────────────────────────────────────────── */
   function exportBackup(){
@@ -1940,6 +1941,90 @@
   });
 
   boot();
+})();
+</script>
+
+<!-- ── PARTICLE SYSTEM ─────────────────────────────────────────────────────
+     Self-contained IIFE. Canvas at z-index:5 — above static layout blocks,
+     below every positioned UI layer (sidebar 60, toggle 70, log-dock 40,
+     modals 100, toast 200). pointer-events:none = zero click interference.
+──────────────────────────────────────────────────────────────────────────── -->
+<script>
+(function(){
+  'use strict';
+  var cvs = document.getElementById('pcvs');
+  var ctx  = cvs.getContext('2d');
+  var W, H;
+
+  /* ── config ── */
+  var COUNT   = 165;
+  var MIN_R   = 0.45;
+  var MAX_R   = 2.1;
+  var MIN_OP  = 0.07;
+  var MAX_OP  = 0.38;
+  var MIN_VY  = 0.14;
+  var MAX_VY  = 0.52;
+  var TEAL_CHANCE = 0.22;
+
+  function rand(a, b){ return a + Math.random() * (b - a); }
+
+  function make(init){
+    var r  = rand(MIN_R, MAX_R);
+    return {
+      x  : rand(0, W),
+      y  : init ? rand(0, H) : rand(-8, -1),
+      r  : r,
+      vx : rand(-0.22, 0.22),
+      vy : MIN_VY + (r - MIN_R) / (MAX_R - MIN_R) * (MAX_VY - MIN_VY) + rand(0, 0.12),
+      op : rand(MIN_OP, MAX_OP),
+      wph: rand(0, Math.PI * 2),
+      wsp: rand(0.004, 0.020),
+      wam: rand(0.18, 0.52),
+      teal: Math.random() < TEAL_CHANCE
+    };
+  }
+
+  function resize(){
+    W = cvs.width  = window.innerWidth;
+    H = cvs.height = window.innerHeight;
+  }
+
+  var pts = [];
+  function init(){
+    resize();
+    pts.length = 0;
+    for(var i = 0; i < COUNT; i++) pts.push(make(true));
+  }
+
+  function frame(){
+    ctx.clearRect(0, 0, W, H);
+    for(var i = 0; i < COUNT; i++){
+      var p = pts[i];
+      p.wph += p.wsp;
+      p.x   += p.vx + Math.sin(p.wph) * p.wam;
+      p.y   += p.vy;
+      if(p.y > H + 6 || p.x < -6 || p.x > W + 6){
+        pts[i] = make(false);
+        pts[i].x = rand(0, W);
+        continue;
+      }
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, 6.28318);
+      ctx.fillStyle = p.teal
+        ? 'rgba(155,240,215,' + p.op + ')'
+        : 'rgba(255,255,255,' + p.op + ')';
+      ctx.fill();
+    }
+    requestAnimationFrame(frame);
+  }
+
+  window.addEventListener('resize', function(){
+    resize();
+    pts.forEach(function(p){ p.x = rand(0, W); });
+  });
+
+  init();
+  frame();
 })();
 </script>
 </body>
