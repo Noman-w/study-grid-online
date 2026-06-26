@@ -1944,80 +1944,195 @@
 })();
 </script>
 
-<!-- ── PARTICLE SYSTEM ─────────────────────────────────────────────────────
-     Self-contained IIFE. Canvas at z-index:5 — above static layout blocks,
-     below every positioned UI layer (sidebar 60, toggle 70, log-dock 40,
-     modals 100, toast 200). pointer-events:none = zero click interference.
-──────────────────────────────────────────────────────────────────────────── -->
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PARTICLE SYSTEM v2  —  5 effects, single self-contained IIFE
+     ① Mouse repulsion   ② Per-layer parallax depth   ③ Glow on large dots
+     ④ Twinkle / breathing opacity   ⑤ Teal connection web
+     Canvas z-index:5 → above static cards, below every positioned UI layer.
+     pointer-events:none → zero click interference.
+══════════════════════════════════════════════════════════════════════════ -->
 <script>
 (function(){
   'use strict';
+
   var cvs = document.getElementById('pcvs');
   var ctx  = cvs.getContext('2d');
   var W, H;
 
-  /* ── config ── */
-  var COUNT   = 165;
-  var MIN_R   = 0.45;
-  var MAX_R   = 2.1;
-  var MIN_OP  = 0.07;
-  var MAX_OP  = 0.38;
-  var MIN_VY  = 0.14;
-  var MAX_VY  = 0.52;
-  var TEAL_CHANCE = 0.22;
+  /* ─────────────────────────────────────────────────────────────────────────
+     LAYER CONFIG   (far → mid → near  =  slow/small/dim → fast/large/bright)
+     Each layer spawns its own particles; layer index is permanent per slot
+     so connection-web indices stay stable across recycles.
+     ───────────────────────────────────────────────────────────────────────── */
+  var LAYERS = [
+    // n     rMin  rMax  vyMin vyMax opMin opMax waMin waMax tealChance
+    {  n:90,  rMin:0.50, rMax:1.30, vyMin:0.07, vyMax:0.18, opMin:0.06, opMax:0.20, waMin:0.07, waMax:0.22, tc:0.08 }, // 0 far
+    {  n:100, rMin:1.00, rMax:2.20, vyMin:0.14, vyMax:0.36, opMin:0.10, opMax:0.30, waMin:0.14, waMax:0.40, tc:0.20 }, // 1 mid
+    {  n:50,  rMin:1.80, rMax:3.60, vyMin:0.28, vyMax:0.58, opMin:0.18, opMax:0.48, waMin:0.20, waMax:0.54, tc:0.32 }  // 2 near
+  ];
+  /* connection web — only mid+near layers (indices 90..239) */
+  var FAR_COUNT    = 90;   /* pts[0..89]   = far  */
+  /* mid starts at 90, near starts at 190, total = 240 */
 
+  var CONNECT_DIST = 82;   /* px  — max distance for web lines             */
+  var CONNECT_OP   = 0.13; /* max line opacity                             */
+  var REPEL_R      = 105;  /* px  — mouse repulsion radius                 */
+  var REPEL_STR    = 0.50; /* force magnitude per frame at zero distance   */
+  var REPEL_DAMP   = 0.88; /* extra velocity damping factor each frame     */
+
+  /* ── helpers ── */
   function rand(a, b){ return a + Math.random() * (b - a); }
+  function clamp(v, lo, hi){ return v < lo ? lo : v > hi ? hi : v; }
 
-  function make(init){
-    var r  = rand(MIN_R, MAX_R);
+  /* ── particle factory ── */
+  function make(layerIdx, init){
+    var L      = LAYERS[layerIdx];
+    var r      = rand(L.rMin, L.rMax);
+    var opBase = rand(L.opMin, L.opMax);
     return {
-      x  : rand(0, W),
-      y  : init ? rand(0, H) : rand(-8, -1),
-      r  : r,
-      vx : rand(-0.22, 0.22),
-      vy : MIN_VY + (r - MIN_R) / (MAX_R - MIN_R) * (MAX_VY - MIN_VY) + rand(0, 0.12),
-      op : rand(MIN_OP, MAX_OP),
-      wph: rand(0, Math.PI * 2),
-      wsp: rand(0.004, 0.020),
-      wam: rand(0.18, 0.52),
-      teal: Math.random() < TEAL_CHANCE
+      x    : rand(0, W),
+      y    : init ? rand(0, H) : rand(-12, -1),
+      r    : r,
+      layer: layerIdx,
+      vx   : rand(-0.18, 0.18),
+      vy   : rand(L.vyMin, L.vyMax),
+      evx  : 0,              /* repulsion extra velocity X */
+      evy  : 0,              /* repulsion extra velocity Y */
+      wph  : rand(0, 6.283), /* wobble phase               */
+      wsp  : rand(0.003, 0.017), /* wobble speed           */
+      wam  : rand(L.waMin, L.waMax), /* wobble amplitude   */
+      twBase: opBase,        /* twinkle: centre opacity    */
+      twAmp : rand(0.28, 0.58), /* twinkle: fraction of twBase to swing  */
+      twPh  : rand(0, 6.283),   /* twinkle: phase                        */
+      twSp  : rand(0.005, 0.021),/* twinkle: speed                       */
+      op    : opBase,        /* live opacity (overwritten each frame)     */
+      teal  : Math.random() < L.tc,
+      glow  : false          /* set true below for near/large-mid         */
     };
   }
 
+  /* ── canvas resize ── */
   function resize(){
     W = cvs.width  = window.innerWidth;
     H = cvs.height = window.innerHeight;
   }
 
+  /* ── spawn all particles ── */
   var pts = [];
   function init(){
     resize();
     pts.length = 0;
-    for(var i = 0; i < COUNT; i++) pts.push(make(true));
+    for(var li = 0; li < LAYERS.length; li++){
+      for(var i = 0; i < LAYERS[li].n; i++){
+        var p = make(li, true);
+        /* mark which particles get glow (near layer + larger mid) */
+        p.glow = (li === 2) || (li === 1 && p.r > 1.05);
+        pts.push(p);
+      }
+    }
   }
 
+  /* ── mouse state (off-screen default so repulsion is inactive) ── */
+  var mx = -9999, my = -9999;
+  window.addEventListener('mousemove', function(e){ mx = e.clientX; my = e.clientY; });
+  window.addEventListener('mouseleave', function(){ mx = -9999; my = -9999; });
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     MAIN LOOP
+  ═══════════════════════════════════════════════════════════════════════ */
   function frame(){
     ctx.clearRect(0, 0, W, H);
-    for(var i = 0; i < COUNT; i++){
-      var p = pts[i];
+    var i, j, p, q, dx, dy, dist, force, lineOp;
+    var total = pts.length;
+
+    /* ── PASS 1 : physics + twinkle ── */
+    for(i = 0; i < total; i++){
+      p = pts[i];
+
+      /* ① twinkle — breathe opacity on independent sine wave */
+      p.twPh += p.twSp;
+      p.op = clamp(p.twBase + Math.sin(p.twPh) * p.twBase * p.twAmp, 0.02, 0.92);
+
+      /* wobble */
       p.wph += p.wsp;
-      p.x   += p.vx + Math.sin(p.wph) * p.wam;
-      p.y   += p.vy;
-      if(p.y > H + 6 || p.x < -6 || p.x > W + 6){
-        pts[i] = make(false);
-        pts[i].x = rand(0, W);
-        continue;
+
+      /* ① mouse repulsion — push particles away from cursor */
+      dx = p.x - mx;
+      dy = p.y - my;
+      dist = Math.sqrt(dx * dx + dy * dy);
+      if(dist < REPEL_R && dist > 0.5){
+        force  = (REPEL_R - dist) / REPEL_R * REPEL_STR;
+        p.evx += (dx / dist) * force;
+        p.evy += (dy / dist) * force;
       }
+      p.evx *= REPEL_DAMP;   /* bleed extra velocity back to zero */
+      p.evy *= REPEL_DAMP;
+
+      /* move */
+      p.x += p.vx + Math.sin(p.wph) * p.wam + p.evx;
+      p.y += p.vy + p.evy;
+
+      /* recycle when off-screen — preserve layer */
+      if(p.y > H + 10 || p.x < -14 || p.x > W + 14){
+        pts[i] = make(p.layer, false);
+        pts[i].x    = rand(0, W);
+        pts[i].glow = (p.layer === 2) || (p.layer === 1 && pts[i].r > 1.05);
+      }
+    }
+
+    /* ── PASS 2 : connection web (mid + near only) ──
+       Lines are drawn BEFORE dots so dots render on top of their endpoints. */
+    ctx.lineWidth = 0.65;
+    for(i = FAR_COUNT; i < total; i++){
+      p = pts[i];
+      for(j = i + 1; j < total; j++){
+        q    = pts[j];
+        dx   = p.x - q.x;
+        dy   = p.y - q.y;
+        dist = Math.sqrt(dx * dx + dy * dy);
+        if(dist < CONNECT_DIST){
+          /* fade with distance, also scale by the dimmer of the two dots */
+          lineOp = (1 - dist / CONNECT_DIST) * CONNECT_OP
+                   * Math.min(p.op, q.op) * 3.2;
+          lineOp = clamp(lineOp, 0, CONNECT_OP);
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(q.x, q.y);
+          ctx.strokeStyle = 'rgba(79,227,193,' + lineOp + ')';
+          ctx.stroke();
+        }
+      }
+    }
+
+    /* ── PASS 3 : draw particles ── */
+    for(i = 0; i < total; i++){
+      p = pts[i];
+
+      /* ② glow for near layer + larger mid particles */
+      if(p.glow){
+        ctx.shadowBlur  = p.r * 9;
+        ctx.shadowColor = p.teal
+          ? 'rgba(79,227,193,'  + (p.op * 0.85) + ')'
+          : 'rgba(220,235,255,' + (p.op * 0.70) + ')';
+      }
+
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, 6.28318);
       ctx.fillStyle = p.teal
         ? 'rgba(155,240,215,' + p.op + ')'
-        : 'rgba(255,255,255,' + p.op + ')';
+        : 'rgba(255,255,255,'  + p.op + ')';
       ctx.fill();
+
+      if(p.glow){
+        ctx.shadowBlur  = 0;
+        ctx.shadowColor = 'transparent';
+      }
     }
+
     requestAnimationFrame(frame);
   }
 
+  /* ── resize handler ── */
   window.addEventListener('resize', function(){
     resize();
     pts.forEach(function(p){ p.x = rand(0, W); });
