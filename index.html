@@ -22,7 +22,6 @@
   html{
     background-image: url('eg.avif');
     background-size:cover;background-position:center;background-attachment:fixed;background-repeat:no-repeat;
-    will-change:transform;
     /* Replace the URL above with your own image path if desired */
   }
   html,body{background-color:transparent;color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
@@ -31,6 +30,7 @@
     background-image:linear-gradient(var(--line-soft) 1px,transparent 1px),linear-gradient(90deg,var(--line-soft) 1px,transparent 1px);
     background-size:32px 32px;background-position:center top;min-height:100vh;
   }
+  body.modal-open{overflow:hidden;}
   .mono{font-family:'JetBrains Mono',monospace;font-feature-settings:"tnum";}
   .display{font-family:'Space Grotesk',sans-serif;}
   .app{max-width:1180px;margin:0 auto;padding:20px 20px 100px;}
@@ -1555,8 +1555,8 @@
   }
 
   /* ── MODALS ─────────────────────────────────────────────────────────────── */
-  function openModal(id){ document.getElementById(id).classList.add('show'); }
-  function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+  function openModal(id){ document.getElementById(id).classList.add('show'); document.body.classList.add('modal-open'); }
+  function closeModal(id){ document.getElementById(id).classList.remove('show'); if(!document.querySelector('.modal-bg.show')) document.body.classList.remove('modal-open'); }
 
   /* ── BACKUP ─────────────────────────────────────────────────────────────── */
   function exportBackup(){
