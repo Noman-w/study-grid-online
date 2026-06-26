@@ -19,19 +19,10 @@
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   /* ── BACKGROUND IMAGE (fixed, full-viewport, behind everything) ──────── */
-  /* Using a pseudo-element instead of background-attachment:fixed avoids     */
-  /* per-frame repaints — the image is promoted to its own GPU layer and stays */
-  /* perfectly pinned while content scrolls smoothly over it.                 */
-  html::before{
-    content:'';
-    position:fixed;
-    inset:0;
-    z-index:-1;
+  html{
     background-image: url('eg.avif');
-    background-size:cover;
-    background-position:center;
-    background-repeat:no-repeat;
-    will-change:transform;
+    background-size:cover;background-position:center;background-attachment:fixed;background-repeat:no-repeat;
+    /* Replace the URL above with your own image path if desired */
   }
   html,body{background-color:transparent;color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
   body{
