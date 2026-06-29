@@ -920,8 +920,9 @@
     // Flush immediately — no debounce, no fire-and-forget.
     await persistTimer();
 
-    // Live placeholder in session history
-    state.sessionHistory.unshift({ ts:Date.now(), hours:0, note:topic, isLive:true });
+    // Live placeholder in session history — store started_at so the log
+    // can show "Started at HH:MM" and we can detect ghost entries on restore.
+    state.sessionHistory.unshift({ ts:Date.now(), hours:0, note:topic, isLive:true, started_at: serverNow });
     saveProfile();
 
     startTick();
@@ -1093,7 +1094,7 @@
       startTick();
       // Ensure live placeholder exists in history
       if(!state.sessionHistory.find(s=>s.isLive)){
-        state.sessionHistory.unshift({ ts:Date.now(), hours:0, note:timerRecord.topic, isLive:true });
+        state.sessionHistory.unshift({ ts:Date.now(), hours:0, note:timerRecord.topic, isLive:true, started_at: timerRecord.started_at||null });
       }
     } else if(timerRecord.status==='paused'){
       banner.className = 'restore-banner paused-banner';
@@ -1179,7 +1180,7 @@
         dailyGoalHours: state.dailyGoalHours,
         timerRecord   : { ...timerRecord, written_at: new Date().toISOString() },
         recentLog     : (state.sessionHistory||[]).filter(s=>!s.isLive).slice(0,5)
-                          .map(s=>({ ts:s.ts, hours:s.hours, note:(s.note||'').slice(0,200) })),
+                          .map(s=>({ ts:s.ts, hours:s.hours, note:(s.note||'').slice(0,200), started_at:s.started_at||null })),
       };
       if(state.groupName) cur.name = state.groupName;
       await window.storage.set(key, JSON.stringify(cur), true);
@@ -1348,12 +1349,32 @@
     state.sessionHistory.slice(0,20).forEach(s=>{
       let dateStr, hoursText, noteHtml;
       if(s.isLive){
-        dateStr   = '[Active Now]';
+        // Ghost guard: only show the live entry if the timer is actually running or paused.
+        // If timerRecord is idle, this is a leftover placeholder — skip it entirely.
+        if(timerRecord.status === 'idle') return;
+
+        // Show the real time start from started_at stored in the placeholder
+        let startLabel = '[Active Now]';
+        if(s.started_at){
+          const sd = new Date(s.started_at);
+          startLabel = 'Started · ' + sd.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+        }
+        dateStr   = startLabel;
         hoursText = fmtClock(getElapsedMs());
-        noteHtml  = `Studying: <span style="color:var(--teal);font-weight:600;">${escapeHtml(s.note)}…</span>`;
+        const statusIcon = timerRecord.status === 'paused' ? '⏸ Paused' : '▶ Live';
+        noteHtml  = `<span style="color:var(--teal);font-weight:600;">${statusIcon} — ${escapeHtml(s.note)}</span>`;
       } else {
-        const d   = new Date(s.ts);
-        dateStr   = d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' · '+d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+        const d       = new Date(s.ts);
+        const endTime = d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+        const dateLabel = d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+        // Show start time if stored, otherwise fall back to end time label only
+        if(s.started_at){
+          const sd = new Date(s.started_at);
+          const startTime = sd.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+          dateStr = dateLabel + ' · ' + startTime + '–' + endTime;
+        } else {
+          dateStr = dateLabel + ' · ' + endTime;
+        }
         hoursText = fmtHours(s.hours);
         noteHtml  = s.note ? escapeHtml(s.note) : '<span class="empty">No notes added</span>';
       }
@@ -1463,7 +1484,7 @@
             // Another browser started a new session — create the isLive placeholder
             // if it doesn't already exist so stop/save works correctly here too.
             if(!state.sessionHistory.find(s=>s.isLive)){
-              state.sessionHistory.unshift({ ts:Date.now(), hours:0, note:timerRecord.topic||'', isLive:true });
+              state.sessionHistory.unshift({ ts:Date.now(), hours:0, note:timerRecord.topic||'', isLive:true, started_at: timerRecord.started_at||null });
             }
             startTick();
           } else if(timerRecord.status === 'paused'){
@@ -1556,7 +1577,7 @@
     /* room activity log */
     const activity = [];
     Object.entries(group.members).forEach(([id,m])=>{
-      (m.recentLog||[]).forEach(s=>activity.push({id, name:m.name, ts:s.ts, hours:s.hours, note:s.note}));
+      (m.recentLog||[]).forEach(s=>activity.push({id, name:m.name, ts:s.ts, hours:s.hours, note:s.note, started_at:s.started_at||null}));
     });
     activity.sort((a,b)=>b.ts-a.ts);
     const activityFeed = document.getElementById('roomActivityList');
@@ -1566,7 +1587,16 @@
       activityFeed.innerHTML='';
       activity.slice(0,30).forEach(s=>{
         const d = new Date(s.ts);
-        const dateStr = d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' · '+d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+        const endTime   = d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+        const dateLabel = d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+        let dateStr;
+        if(s.started_at){
+          const sd = new Date(s.started_at);
+          const startTime = sd.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+          dateStr = dateLabel + ' · ' + startTime + '–' + endTime;
+        } else {
+          dateStr = dateLabel + ' · ' + endTime;
+        }
         const row = document.createElement('div');
         row.className='log-row';
         const who = escapeHtml(s.name)+(s.id===state.id?' (you)':'');
@@ -1735,13 +1765,16 @@
       const hrs = Math.round(elapsedMs / 1000) / 3600;
 
       // Finalize sessionHistory — convert the isLive placeholder into the real entry.
+      // Preserve started_at from the placeholder so the log can show start→end times.
       const liveIdx = state.sessionHistory.findIndex(s=>s.isLive);
       if(liveIdx!==-1){
-        const topic = state.sessionHistory[liveIdx].note;
+        const topic      = state.sessionHistory[liveIdx].note;
+        const startedAt  = state.sessionHistory[liveIdx].started_at || null;
         state.sessionHistory[liveIdx] = {
-          ts   : Date.now(),
-          hours: hrs,
-          note : topic+(extraNote?' — '+extraNote:''),
+          ts        : Date.now(),
+          hours     : hrs,
+          note      : topic+(extraNote?' — '+extraNote:''),
+          started_at: startedAt,
         };
       }
 
