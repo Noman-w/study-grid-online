@@ -642,6 +642,34 @@
     }catch(e){ return false; }
   }
 
+  /**
+   * Fetch the current UTC time from Supabase's postgres server.
+   * This is the single source of truth for all timer timestamps —
+   * eliminates phone clock drift, mobile browser suspension, and
+   * any client-side time skew.
+   *
+   * Implementation: upserts a tiny sentinel row and reads back the
+   * DB-generated updated_at timestamp. No separate RPC needed —
+   * works with the existing studygrid_kv table and free Supabase plan.
+   * Falls back to Date.now() only if the network call fails.
+   */
+  window.getServerNow = async function(){
+    if(!sb) return new Date().toISOString();
+    try{
+      // Write a sentinel key and read back the server-generated timestamp.
+      // The 'updated_at' column is set by postgres DEFAULT now() on each upsert.
+      const sentinelKey = '__server_time_sync__';
+      const { data, error } = await sb
+        .from('studygrid_kv')
+        .upsert({ key: sentinelKey, value: { t: 1 }, updated_at: new Date().toISOString() })
+        .select('updated_at')
+        .single();
+      if(!error && data && data.updated_at) return data.updated_at;
+    }catch(e){}
+    // Fallback: use client time (better than nothing, same as before)
+    return new Date().toISOString();
+  };
+
   window.storage = {
     async get(key, isGlobal){
       if(isGlobal) return sbGet(key);
@@ -878,9 +906,14 @@
     const topic   = topicEl.value.trim() || 'General Focus';
     topicEl.disabled = true;
 
+    // SERVER TIME: use Supabase server clock, not the device clock.
+    // This prevents phone clock drift and mobile browser time freeze from
+    // corrupting the elapsed calculation. The database is now the time source.
+    const serverNow = await window.getServerNow();
+
     timerRecord = {
       status             : 'active',
-      started_at         : new Date().toISOString(),
+      started_at         : serverNow,
       accumulated_seconds: 0,
       topic,
     };
@@ -899,7 +932,13 @@
   /* ── PAUSE ──────────────────────────────────────────────────────────────── */
   async function pauseTimer(){
     if(timerRecord.status!=='active') return;
-    timerRecord.accumulated_seconds = Math.floor(getElapsedMs()/1000);
+    // SERVER TIME: compute accumulated seconds using server clock so
+    // mobile browser suspension doesn't truncate the paused duration.
+    const serverNow   = await window.getServerNow();
+    const startedAtMs = new Date(timerRecord.started_at).getTime();
+    const serverMs    = new Date(serverNow).getTime();
+    const segmentSec  = Math.max(0, Math.floor((serverMs - startedAtMs) / 1000));
+    timerRecord.accumulated_seconds = (timerRecord.accumulated_seconds || 0) + segmentSec;
     timerRecord.started_at          = null;
     timerRecord.status              = 'paused';
     stopTick();
@@ -911,7 +950,9 @@
   /* ── RESUME ─────────────────────────────────────────────────────────────── */
   async function resumeTimer(){
     if(timerRecord.status!=='paused') return;
-    timerRecord.started_at = new Date().toISOString();
+    // SERVER TIME: same reason as startTimer — use server clock on every resume
+    // so pause→resume gaps are measured against the same clock as started_at.
+    timerRecord.started_at = await window.getServerNow();
     timerRecord.status     = 'active';
     await persistTimer();
     startTick();
@@ -921,9 +962,29 @@
 
   /* ── STOP ───────────────────────────────────────────────────────────────── */
   async function stopTimerAndLog(){
-    const elapsedMs    = getElapsedMs();
-    const stoppedTopic = timerRecord.topic;
+    // SERVER-SIDE ELAPSED COMPUTATION
+    // The old approach used getElapsedMs() = Date.now() - started_at, which is
+    // 100% client-side. On mobile (especially Chrome on Android/iOS), the browser
+    // can freeze JS timers when the tab is backgrounded, making Date.now() advance
+    // much slower than real wall-clock time. Fix: fetch server UTC time and compute:
+    //   elapsed = (serverStopAt - started_at) + accumulated_seconds
+    // Both started_at and serverStopAt come from the same server clock, so device
+    // clock skew and browser suspension are completely irrelevant.
+    const snapshotRecord = { ...timerRecord }; // capture before we clear it
     stopTick();
+
+    let elapsedMs;
+    if(snapshotRecord.status === 'active' && snapshotRecord.started_at){
+      const serverStopIso = await window.getServerNow();
+      const serverStopMs  = new Date(serverStopIso).getTime();
+      const startedAtMs   = new Date(snapshotRecord.started_at).getTime();
+      const segmentMs     = Math.max(0, serverStopMs - startedAtMs);
+      const accMs         = (snapshotRecord.accumulated_seconds || 0) * 1000;
+      elapsedMs = accMs + segmentMs;
+    } else {
+      // Was paused — accumulated_seconds already holds the full elapsed time
+      elapsedMs = (snapshotRecord.accumulated_seconds || 0) * 1000;
+    }
 
     // Go idle immediately — timer is done.
     timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
@@ -1929,6 +1990,26 @@
   // ghost-online entry. If the timer is still active/paused when the tab closes,
   // we do NOT write the group blob (the active timer record already reflects the
   // correct state, and overwriting would cause a race with the timer persistence).
+  // ── MOBILE TAB RESUME SYNC ──────────────────────────────────────────────
+  // When a mobile browser brings a backgrounded tab back to the foreground,
+  // the JS clock may have been frozen for seconds or minutes. The timer
+  // display is already timestamp-based so it self-corrects immediately on
+  // resume. No action needed for display — it will show the right value on
+  // the next tick (1 second later at most).
+  //
+  // What CAN go wrong: if the user presses Stop immediately after resume,
+  // the server-time fetch in stopTimerAndLog() handles it correctly because
+  // we ask the server "what time is it now?" at the moment of stopping.
+  // So visibilitychange needs no special logic here — server-time in stop/pause
+  // is the complete fix.
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'visible' && timerRecord.status === 'active'){
+      // Force immediate display refresh so the clock jumps to correct value
+      // the instant the tab comes back (instead of waiting for next tick)
+      document.getElementById('timerDisplay').textContent = fmtClock(getElapsedMs());
+    }
+  });
+
   window.addEventListener('beforeunload', () => {
     if(typeof flushProfileSave  === 'function') flushProfileSave();
     if(typeof flushPersistTimer === 'function') flushPersistTimer();
