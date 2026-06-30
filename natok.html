@@ -2669,8 +2669,16 @@ const navToggle = document.getElementById('navToggle');
 const sidebar    = document.getElementById('sidebar');
 if(navToggle && sidebar){
   navToggle.addEventListener('click', () => {
+    const opening = !sidebar.classList.contains('expanded');
     sidebar.classList.toggle('expanded');
     navToggle.classList.toggle('open');
+    // The sidebar lives in normal document flow right below the sticky top
+    // bar — if the user has scrolled down the page, the panel expands
+    // off-screen above their current view and looks like nothing happened.
+    // Scroll back up so the now-open panel is actually visible.
+    if(opening){
+      window.scrollTo({top:0,behavior:'smooth'});
+    }
   });
   // Tapping any scene link (or the glossary link) closes the panel so the
   // user lands straight on the content instead of having to close it manually.
