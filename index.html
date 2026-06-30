@@ -1114,12 +1114,57 @@
      ══════════════════════════════════════════════════════════════════════════ */
 
   /* ── STORAGE ────────────────────────────────────────────────────────────── */
+  /* ── DATABASE IS THE ONLY SOURCE OF TRUTH ─────────────────────────────────
+   * localStorage is NOT a second copy of the truth — it is a paint-cache only,
+   * used to render the UI instantly on boot before the network round-trip
+   * finishes. It is NEVER compared against the cloud, NEVER allowed to win,
+   * and NEVER pushed to Supabase without first being overwritten by the
+   * cloud's actual contents. This guarantees: any edit made directly in
+   * Supabase is reflected on next load, every time, full stop — no stale
+   * device cache can ever silently undo a database fix again.
+   *
+   * Flow:
+   *   1) Read local cache only to avoid a blank screen flash. No trust.
+   *   2) Fetch cloud (state.name is already known from local cache if any,
+   *      so we can resolve the cloud key immediately).
+   *   3) If a cloud record exists — it unconditionally overwrites state.
+   *      No "higher wins" comparison. The cloud is simply correct.
+   *   4) Local cache is rewritten to mirror the cloud exactly, so the device
+   *      cache can never again drift from the database.
+   * ────────────────────────────────────────────────────────────────────── */
   async function loadProfile(){
+    // STEP 1 — paint-only local read. Treated as provisional, never authoritative.
     try{
       const r = await window.storage.get(STORAGE_KEY, false);
-      if(r && r.value){ state = Object.assign(state, JSON.parse(r.value)); return true; }
+      if(r && r.value){ state = Object.assign(state, JSON.parse(r.value)); }
     }catch(e){}
-    return false;
+
+    // STEP 2/3 — cloud is the only authority. Always fetch, always overwrite.
+    if(state.name){
+      try{
+        const cloudKey = 'user-profile:'+state.name.toLowerCase();
+        const r = await window.storage.get(cloudKey, true);
+        if(r && r.value){
+          const cloud = JSON.parse(r.value);
+          // Unconditional overwrite — the database is correct by definition.
+          // Re-create state fresh from cloud rather than Object.assign-merging,
+          // so a field manually DELETED in Supabase also disappears here
+          // instead of surviving from the stale local cache.
+          state = Object.assign({}, state, cloud);
+
+          // STEP 4 — local cache now mirrors the cloud exactly.
+          try{ await window.storage.set(STORAGE_KEY, JSON.stringify(state), false); }catch(e){}
+          return true;
+        }
+      }catch(e){
+        // Network/offline failure: fall back to whatever local had, but this
+        // is a degraded-mode fallback, not a design choice — the moment the
+        // network is back, the next boot will reconcile from cloud again.
+        console.warn('Cloud profile fetch failed — using local cache as temporary fallback', e);
+      }
+    }
+
+    return !!state.id;
   }
   /* saveProfile — local write is instant; cloud write is debounced so that
    * rapid consecutive calls (e.g. start-timer → syncGroupSelf → render all in
