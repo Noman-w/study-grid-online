@@ -627,6 +627,8 @@
    * Falls back to Date.now() only if the network call fails, and flags
    * the result so callers can tell it wasn't a verified server value.
    */
+  window.clockOffsetMs = 0; // shared across all script blocks — see syncedNow() below
+
   window.getServerNow = async function(){
     if(!sb) return new Date().toISOString();
     try{
@@ -637,7 +639,7 @@
         const serverMs = new Date(data).getTime();
         // Use the midpoint of the request to roughly cancel out one-way network latency.
         const localMid = (localBefore + localAfter) / 2;
-        clockOffsetMs = serverMs - localMid;
+        window.clockOffsetMs = serverMs - localMid;
         return data;
       }
       console.warn('STUDYGRID: get_server_time RPC failed, falling back to local clock', error);
@@ -850,17 +852,20 @@
   /**
    * How far the LOCAL device clock is from the SERVER clock, in ms.
    * (serverTime - localTime). Refreshed every time getServerNow() is called.
-   * A device with a skewed clock (fast, slow, wrong timezone handling, etc.)
-   * would otherwise make the live per-second display wrong — even though
-   * started_at/stop times themselves are correctly server-anchored — because
-   * naively doing `Date.now() - started_at` mixes a server timestamp with a
-   * local one. syncedNow() below corrects for that using this offset.
+   * Stored on `window` (not a plain `let`) so it's shared correctly across
+   * every <script> block in this file — a local `let` here would create a
+   * separate binding invisible to getServerNow()'s own script block, which
+   * is exactly what caused the live display to silently ignore this value.
+   * A device with a skewed clock would otherwise make the live per-second
+   * display wrong — even though started_at/stop times themselves are
+   * correctly server-anchored — because naively doing
+   * `Date.now() - started_at` mixes a server timestamp with a local one.
+   * syncedNow() below corrects for that using this offset.
    */
-  let clockOffsetMs = 0;
 
   /** Best local estimate of the current SERVER time, updated instantly every
    * tick without needing a network round-trip each second. */
-  function syncedNow(){ return Date.now() + clockOffsetMs; }
+  function syncedNow(){ return Date.now() + (window.clockOffsetMs||0); }
 
   /** Total elapsed milliseconds, recomputed from the persisted record. */
   function getElapsedMs(){
