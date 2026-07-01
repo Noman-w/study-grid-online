@@ -630,8 +630,16 @@
   window.getServerNow = async function(){
     if(!sb) return new Date().toISOString();
     try{
+      const localBefore = Date.now();
       const { data, error } = await sb.rpc('get_server_time');
-      if(!error && data) return data;
+      const localAfter  = Date.now();
+      if(!error && data){
+        const serverMs = new Date(data).getTime();
+        // Use the midpoint of the request to roughly cancel out one-way network latency.
+        const localMid = (localBefore + localAfter) / 2;
+        clockOffsetMs = serverMs - localMid;
+        return data;
+      }
       console.warn('STUDYGRID: get_server_time RPC failed, falling back to local clock', error);
     }catch(e){
       console.warn('STUDYGRID: get_server_time RPC threw, falling back to local clock', e);
@@ -839,11 +847,26 @@
      TIMESTAMP-BASED TIMER  –  CORE FUNCTIONS
      ══════════════════════════════════════════════════════════════════════════ */
 
+  /**
+   * How far the LOCAL device clock is from the SERVER clock, in ms.
+   * (serverTime - localTime). Refreshed every time getServerNow() is called.
+   * A device with a skewed clock (fast, slow, wrong timezone handling, etc.)
+   * would otherwise make the live per-second display wrong — even though
+   * started_at/stop times themselves are correctly server-anchored — because
+   * naively doing `Date.now() - started_at` mixes a server timestamp with a
+   * local one. syncedNow() below corrects for that using this offset.
+   */
+  let clockOffsetMs = 0;
+
+  /** Best local estimate of the current SERVER time, updated instantly every
+   * tick without needing a network round-trip each second. */
+  function syncedNow(){ return Date.now() + clockOffsetMs; }
+
   /** Total elapsed milliseconds, recomputed from the persisted record. */
   function getElapsedMs(){
     let ms = (timerRecord.accumulated_seconds||0)*1000;
     if(timerRecord.status==='active' && timerRecord.started_at){
-      ms += Date.now() - new Date(timerRecord.started_at).getTime();
+      ms += syncedNow() - new Date(timerRecord.started_at).getTime();
     }
     return Math.max(0, ms);
   }
@@ -1042,10 +1065,14 @@
   /* ── TICK (display only) ────────────────────────────────────────────────── */
   function startTick(){
     stopTick();
+    let tickCount = 0;
     tickHandle = setInterval(()=>{
+      tickCount++;
       // Recompute from timestamp — accurate even after sleep/background
       document.getElementById('timerDisplay').textContent = fmtClock(getElapsedMs());
       if(state.sessionHistory.find(s=>s.isLive)) renderStudyLog();
+      // Re-sync clock offset every 5 minutes in case local drift changes over a long session
+      if(tickCount % 300 === 0){ window.getServerNow().catch(()=>{}); }
     }, 1000);
   }
   function stopTick(){ if(tickHandle){ clearInterval(tickHandle); tickHandle=null; } }
@@ -2118,6 +2145,7 @@
       saveProfile();
       await flushProfileSave();
       closeModal('onboardModal');
+      await window.getServerNow(); // prime clock offset before any elapsed-time math runs
       const hadTimer = await loadPersistedTimer();
       if(hadTimer){ restoreTimerUI(); } else { applyTimerUI(); }
       if(state.rooms&&state.rooms.length){ try{ await syncGroupSelf(); }catch(e){} }
@@ -2144,6 +2172,7 @@
     // is fetched and state.id is known).
     if(state.id){
       migrateRoomsIfNeeded();
+      await window.getServerNow(); // prime clock offset before any elapsed-time math runs
       const hadTimer = await loadPersistedTimer();
       if(hadTimer){ restoreTimerUI(); } else { applyTimerUI(); }
       if(state.rooms&&state.rooms.length){ try{ await syncGroupSelf(); }catch(e){} }
