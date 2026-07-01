@@ -619,24 +619,23 @@
    * eliminates phone clock drift, mobile browser suspension, and
    * any client-side time skew.
    *
-   * Implementation: upserts a tiny sentinel row and reads back the
-   * DB-generated updated_at timestamp. No separate RPC needed —
-   * works with the existing studygrid_kv table and free Supabase plan.
-   * Falls back to Date.now() only if the network call fails.
+   * Implementation: calls a Postgres RPC (`get_server_time`) that takes
+   * NO arguments and returns `now()`. Unlike a sentinel-row upsert (which
+   * writes a client-supplied timestamp and reads it straight back — not
+   * actually server time at all), this value is 100% generated inside
+   * Postgres and cannot be influenced by anything the client sends.
+   * Falls back to Date.now() only if the network call fails, and flags
+   * the result so callers can tell it wasn't a verified server value.
    */
   window.getServerNow = async function(){
     if(!sb) return new Date().toISOString();
     try{
-      // Write a sentinel key and read back the server-generated timestamp.
-      // The 'updated_at' column is set by postgres DEFAULT now() on each upsert.
-      const sentinelKey = '__server_time_sync__';
-      const { data, error } = await sb
-        .from('studygrid_kv')
-        .upsert({ key: sentinelKey, value: { t: 1 }, updated_at: new Date().toISOString() })
-        .select('updated_at')
-        .single();
-      if(!error && data && data.updated_at) return data.updated_at;
-    }catch(e){}
+      const { data, error } = await sb.rpc('get_server_time');
+      if(!error && data) return data;
+      console.warn('STUDYGRID: get_server_time RPC failed, falling back to local clock', error);
+    }catch(e){
+      console.warn('STUDYGRID: get_server_time RPC threw, falling back to local clock', e);
+    }
     // Fallback: use client time (better than nothing, same as before)
     return new Date().toISOString();
   };
@@ -776,6 +775,27 @@
   }
   /* Convert float hours → hh:mm:ss */
   function fmtHours(h){ return fmtClock(Math.round((h||0)*3600)*1000); }
+
+  /* Convert float hours → hh:mm:ss, but for a SINGLE session/log entry (not a
+   * lifetime total). A real study session can't plausibly run past a couple
+   * weeks straight, so anything beyond that is corrupted/bad data (typo from
+   * a manual DB edit, unit mix-up, etc.) rather than a real duration.
+   * Flag it visibly instead of rendering a meaningless huge number. */
+  const SESSION_HOURS_SANITY_CAP = 500; // ~3 weeks continuous — generous but bounded
+  function fmtSessionHours(h){
+    if(h==null || !isFinite(h) || h<0 || h>SESSION_HOURS_SANITY_CAP){
+      return `<span title="Stored value: ${h} hours — looks corrupted, not a real session length" style="color:var(--danger);cursor:help;">⚠ bad data</span>`;
+    }
+    return fmtHours(h);
+  }
+
+  /* A single pause→resume or start→stop segment should never plausibly be
+   * longer than the sanity cap. If it is, something upstream returned a
+   * bad timestamp (clock glitch, failed RPC that fell back to a bad local
+   * clock, etc.) — treat the segment as invalid rather than trusting it. */
+  function isPlausibleSegmentMs(ms){
+    return isFinite(ms) && ms>=0 && ms <= SESSION_HOURS_SANITY_CAP*3600*1000;
+  }
 
   function getLevelInfo(xp){
     let level=1, cumulative=0, need=500;
@@ -917,7 +937,16 @@
     const serverNow   = await window.getServerNow();
     const startedAtMs = new Date(timerRecord.started_at).getTime();
     const serverMs    = new Date(serverNow).getTime();
-    const segmentSec  = Math.max(0, Math.floor((serverMs - startedAtMs) / 1000));
+    const segmentMs   = Math.max(0, serverMs - startedAtMs);
+    if(!isPlausibleSegmentMs(segmentMs)){
+      // A clock/RPC glitch produced a nonsense segment. Don't let it into
+      // accumulated_seconds — keep the timer running as if this pause
+      // attempt never happened, and tell the user so nothing silently breaks.
+      console.error('STUDYGRID: implausible pause segment discarded', {segmentMs, startedAt: timerRecord.started_at, serverNow});
+      showToast('Pause failed', 'Time sync looked wrong — timer kept running. Try again.');
+      return;
+    }
+    const segmentSec = Math.floor(segmentMs / 1000);
     timerRecord.accumulated_seconds = (timerRecord.accumulated_seconds || 0) + segmentSec;
     timerRecord.started_at          = null;
     timerRecord.status              = 'paused';
@@ -954,17 +983,23 @@
     stopTick();
 
     let elapsedMs;
+    let segmentBad = false;
     if(snapshotRecord.status === 'active' && snapshotRecord.started_at){
       const serverStopIso = await window.getServerNow();
       const serverStopMs  = new Date(serverStopIso).getTime();
       const startedAtMs   = new Date(snapshotRecord.started_at).getTime();
       const segmentMs     = Math.max(0, serverStopMs - startedAtMs);
-      const accMs         = (snapshotRecord.accumulated_seconds || 0) * 1000;
+      if(!isPlausibleSegmentMs(segmentMs)){
+        segmentBad = true;
+        console.error('STUDYGRID: implausible stop segment discarded', {segmentMs, started_at: snapshotRecord.started_at, serverStopIso});
+      }
+      const accMs = (snapshotRecord.accumulated_seconds || 0) * 1000;
       elapsedMs = accMs + segmentMs;
     } else {
       // Was paused — accumulated_seconds already holds the full elapsed time
       elapsedMs = (snapshotRecord.accumulated_seconds || 0) * 1000;
     }
+    if(!isPlausibleSegmentMs(elapsedMs)) segmentBad = true;
 
     // Go idle immediately — timer is done.
     timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
@@ -974,6 +1009,17 @@
     topicEl.disabled = false;
     topicEl.value    = '';
     applyTimerUI();
+
+    if(segmentBad){
+      // Don't show the user a broken number to save — discard the corrupted
+      // live entry outright and tell them plainly what happened.
+      state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
+      saveProfile();
+      if(state.rooms&&state.rooms.length) await syncGroupSelf();
+      render();
+      showToast('Session not saved', 'Time sync looked wrong for this session, so it was discarded instead of saving a broken duration. Nothing was added to your total.');
+      return;
+    }
 
     // Store raw milliseconds — convert to hours only at the moment of saving.
     // Storing as rounded hours (2dp) loses up to 36 seconds per session.
@@ -1477,7 +1523,7 @@
         } else {
           dateStr = dateLabel + ' · ' + endTime;
         }
-        hoursText = fmtHours(s.hours);
+        hoursText = fmtSessionHours(s.hours);
         noteHtml  = s.note ? escapeHtml(s.note) : '<span class="empty">No notes added</span>';
       }
       const row = document.createElement('div');
@@ -1695,7 +1741,7 @@
           const who = escapeHtml(s.name)+(s.id===state.id?' (you)':'');
           row.innerHTML=`
             <div class="ld-date">${dateStr}</div>
-            <div class="ld-hours mono">${fmtHours(s.hours)}</div>
+            <div class="ld-hours mono">${fmtSessionHours(s.hours)}</div>
             <div class="ld-note"><span class="who">${who}</span> — ${s.note?escapeHtml(s.note):'No notes added'}</div>
           `;
           activityFeed.appendChild(row);
@@ -1709,6 +1755,11 @@
     // Round to nearest second only (not 36-second chunks)
     hours = Math.round(hours * 3600) / 3600;
     if(hours<=0) return;
+    if(!isFinite(hours) || hours>SESSION_HOURS_SANITY_CAP){
+      console.error('addStudyHoursRecord: refusing to log implausible session length', hours);
+      showToast('Session not logged', 'That duration looked invalid — nothing was saved.');
+      return;
+    }
     const prevLevel     = getLevelInfo(state.totalXP).level;
     const prevMilestone = Math.floor(state.totalHours/500);
 
