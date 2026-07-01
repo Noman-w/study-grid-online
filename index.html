@@ -1598,7 +1598,7 @@
 
       if(tr.status === 'active' && tr.started_at){
         const accMs   = (tr.accumulated_seconds||0)*1000;
-        const segMs   = Date.now() - new Date(tr.started_at).getTime();
+        const segMs   = syncedNow() - new Date(tr.started_at).getTime();
         const totalMs = Math.max(0, accMs + segMs);
         dotClass    = 'online';
         runtimeHtml = `<span style="color:var(--teal);font-weight:600;">▶ ${escapeHtml(tr.topic||'Studying')} &nbsp;${fmtClock(totalMs)}</span>`;
