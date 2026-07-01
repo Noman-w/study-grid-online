@@ -6,9 +6,6 @@
 <title>STUDYGRID v.34</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght=500;600;700&family=JetBrains+Mono:wght=400;500;600;700&family=Inter:wght=400;500;600&display=swap" rel="stylesheet">
-<!-- TEMP: exam-special natok button — Bengali font (remove with the button block below) -->
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@600;700&display=swap" rel="stylesheet">
-<!-- /TEMP font -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root{
@@ -221,38 +218,6 @@
   .timer-hero.running .timer-ring{display:block;}
   @keyframes ringPulse{0%,100%{opacity:.5;transform:scale(1);}50%{opacity:.1;transform:scale(1.04);}}
   .timer-actions{display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;justify-content:center;}
-
-  /* ══════════ TEMP: exam-special natok button — DELETE this whole block + the
-     matching HTML block in #timerHero + the font <link> above when removing ══════════ */
-  .natok-special-btn{
-    position:absolute;top:14px;left:14px;z-index:5;
-    display:inline-flex;align-items:center;gap:7px;
-    padding:8px 13px;border-radius:10px;
-    background:linear-gradient(135deg,#7c1f33,#54121f);
-    border:1px solid rgba(201,154,75,.55);
-    box-shadow:0 4px 14px rgba(84,18,31,.35),0 0 0 1px rgba(201,154,75,.12) inset;
-    color:#f4ecd9;text-decoration:none;
-    font-family:'Noto Sans Bengali','Inter',sans-serif;
-    font-size:12.5px;font-weight:600;line-height:1.3;
-    max-width:180px;
-    transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease;
-  }
-  .natok-special-btn:hover{
-    transform:translateY(-1px);
-    border-color:rgba(201,154,75,.9);
-    box-shadow:0 6px 18px rgba(84,18,31,.45),0 0 0 1px rgba(201,154,75,.2) inset;
-  }
-  .natok-special-btn:active{transform:translateY(0);}
-  .natok-special-btn .ns-badge{
-    flex-shrink:0;font-size:9px;font-weight:700;letter-spacing:.04em;
-    text-transform:uppercase;color:#c79a4b;font-family:'Inter',sans-serif;
-    display:block;margin-bottom:2px;
-  }
-  .natok-special-btn .ns-text{display:block;}
-  @media (max-width:560px){
-    .natok-special-btn{top:10px;left:10px;max-width:150px;padding:7px 10px;font-size:11.5px;}
-  }
-  /* ══════════ /TEMP exam-special natok button CSS ══════════ */
   .timer-btn-start{font-size:14px;font-weight:700;padding:13px 36px;border-radius:999px;background:var(--teal);color:#06120f;border:none;cursor:pointer;letter-spacing:.5px;transition:.2s;font-family:'Space Grotesk',sans-serif;}
   .timer-btn-start:hover{box-shadow:0 0 24px var(--teal-glow);transform:scale(1.03);}
   .timer-btn-pause{font-size:14px;font-weight:700;padding:13px 32px;border-radius:999px;background:transparent;color:var(--amber);border:1.5px solid var(--amber);cursor:pointer;letter-spacing:.5px;transition:.2s;font-family:'Space Grotesk',sans-serif;}
@@ -396,12 +361,6 @@
   </div>
 
   <div class="timer-hero" id="timerHero">
-    <!-- TEMP: exam-special natok button — delete this <a> block + CSS block above + font <link> in <head> to remove -->
-    <a class="natok-special-btn" href="natok.html" target="_blank" rel="noopener">
-      <span class="ns-badge">Exam Special</span>
-      <span class="ns-text">সিরাজউদ্দৌলা নাটক ব্যাখ্যা</span>
-    </a>
-    <!-- /TEMP exam-special natok button -->
     <div class="timer-hero-inner">
       <div class="timer-eyebrow">
         <span class="dot-live" id="dockDot"></span>
@@ -470,46 +429,17 @@
   <div class="card room-card" id="roomSection">
     <div class="card-head">
       <div>
-        <div class="card-title">Room</div>
-        <div class="card-sub" id="squadSub">No room joined</div>
+        <div class="card-title">Rooms</div>
+        <div class="card-sub" id="squadSub">No rooms joined</div>
       </div>
-      <span class="group-code-display" id="groupCodeDisplay" style="display:none;"></span>
+      <button class="btn btn-primary btn-sm" id="openGroupModalBtn">+ Join / Create</button>
     </div>
     <div class="room-empty" id="friendsEmpty">
       <p>Join or start a room to compare progress and trade study material with other engineers grinding toward 3,000 hours.</p>
-      <button class="btn btn-primary" id="openGroupModalBtn">Join / Create Room</button>
+      <button class="btn btn-primary" onclick="document.getElementById('openGroupModalBtn').click()">Join / Create Room</button>
     </div>
-    <div class="room-grid" id="roomGrid" style="display:none;">
-      <div>
-        <div class="room-pane-title">Members &amp; 3,000 HR Progress</div>
-        <div class="roster" id="roster"></div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:16px;">
-        <div class="card" style="background:var(--panel-2);border:1px solid var(--line);padding:12px;height:220px;display:flex;flex-direction:column;margin:0;">
-          <div class="room-pane-title">Room Live Chat</div>
-          <div id="chatMessages" style="flex:1;overflow-y:auto;font-size:12px;margin-bottom:8px;display:flex;flex-direction:column;gap:4px;padding-right:4px;"></div>
-          <div style="display:flex;gap:6px;">
-            <input type="text" id="chatInput" maxlength="500" placeholder="Type a message..." style="padding:6px 10px;height:30px;">
-            <button class="btn btn-primary btn-sm" id="sendChatBtn" style="padding:4px 10px;height:30px;">Send</button>
-          </div>
-        </div>
-        <div>
-          <div class="room-pane-title">
-            <span>Shared resources</span>
-            <button class="btn btn-sm" id="addResourceBtn">+ Add link</button>
-          </div>
-          <div class="resources-list" id="resourcesList"></div>
-        </div>
-      </div>
-      <div style="grid-column:1 / -1;">
-        <div class="room-pane-title" style="margin-top:6px;">
-          <span>Room study log</span>
-          <span style="text-transform:none;letter-spacing:0;font-size:10px;">what everyone's been working on</span>
-        </div>
-        <div class="room-activity-list" id="roomActivityList"></div>
-      </div>
-    </div>
-    <button class="btn btn-ghost btn-sm" id="leaveGroupBtn" style="display:none;margin-top:14px;width:fit-content;">Leave room</button>
+    <!-- All room panels render here dynamically, stacked vertically -->
+    <div id="allRoomPanels"></div>
   </div>
 
   <div class="card" id="studyLogSection">
@@ -726,22 +656,27 @@
     }
   };
 
-  let groupRealtimeChannel = null;
-  window.subscribeGroupRealtime = function(groupCode, onChange){
+  let groupRealtimeChannels = {};
+  window.subscribeAllRooms = function(codes, onChange){
     if(!sb) return;
-    if(groupRealtimeChannel){ sb.removeChannel(groupRealtimeChannel); groupRealtimeChannel = null; }
-    if(!groupCode) return;
-    groupRealtimeChannel = sb.channel('room-'+groupCode)
-      .on('postgres_changes', { event:'*', schema:'public', table:'studygrid_kv', filter:'key=eq.group:'+groupCode }, (payload) => {
-         // payload.new.value is the JSONB column — a parsed JS object from Supabase.
-         // Always call onChange; pass the value if present, otherwise null so
-         // renderRoom falls back to fetchGroup() cleanly.
-         onChange(payload.new?.value ?? null);
-      })
-      .subscribe();
+    // Remove channels for codes no longer in the list
+    Object.keys(groupRealtimeChannels).forEach(code=>{
+      if(!codes.includes(code)){ sb.removeChannel(groupRealtimeChannels[code]); delete groupRealtimeChannels[code]; }
+    });
+    // Subscribe to any new codes
+    codes.forEach(code=>{
+      if(!code || groupRealtimeChannels[code]) return;
+      groupRealtimeChannels[code] = sb.channel('room-'+code)
+        .on('postgres_changes', { event:'*', schema:'public', table:'studygrid_kv', filter:'key=eq.group:'+code }, (payload)=>{
+          onChange(code, payload.new?.value ?? null);
+        })
+        .subscribe();
+    });
   };
-  window.unsubscribeGroupRealtime = function(){
-    if(sb && groupRealtimeChannel){ sb.removeChannel(groupRealtimeChannel); groupRealtimeChannel = null; }
+  window.unsubscribeAllRooms = function(){
+    if(!sb) return;
+    Object.values(groupRealtimeChannels).forEach(ch=>sb.removeChannel(ch));
+    groupRealtimeChannels = {};
   };
 </script>
 
@@ -785,7 +720,7 @@
     id:null, name:'', password:'', dailyGoalHours:4,
     totalHours:0, totalXP:0,
     dailyLog:{}, sessionHistory:[],
-    groupCode:null, groupName:null,
+    rooms:[], // [{code, name}] — multi-room support
   };
 
   /* ── timer record ───────────────────────────────────────────────────────────
@@ -805,13 +740,16 @@
   let timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
 
   let tickHandle      = null; // 1-second DOM refresh – does NOT drive elapsed
-  let cachedGroupData = null;
-  let pendingTimerHours = null;
+  let cachedRoomData    = {};   // {code: groupData}
+  let pendingTimerHours  = null;
+  let pendingResourceCode = null;
 
-  /* chat state — tracks last-seen message for smart-scroll & toast notifications */
-  let lastSeenMessageTs = 0;   // timestamp of the newest message seen so far
-  let chatInitialized   = false; // true after the very first successful render
-  let forceChatScroll   = false; // set to true when the user just sent a message
+  /* per-room chat state — keyed by room code */
+  let roomChatState = {};
+  function getChatState(code){
+    if(!roomChatState[code]) roomChatState[code] = {lastSeenMessageTs:0, chatInitialized:false, forceChatScroll:false};
+    return roomChatState[code];
+  }
 
   /* ── utils ──────────────────────────────────────────────────────────────── */
   function uid(len){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<len;i++) s+=c[Math.floor(Math.random()*c.length)]; return s; }
@@ -1043,7 +981,7 @@
       // < 30 seconds: silently discard
       state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
       saveProfile();
-      if(state.groupCode) await syncGroupSelf();
+      if(state.rooms&&state.rooms.length) await syncGroupSelf();
       render();
       return;
     }
@@ -1052,7 +990,7 @@
     document.getElementById('logTimeBadge').textContent = fmtClock(elapsedMs);
     document.getElementById('logNoteInput').value = '';
     openModal('logModal');
-    if(state.groupCode) await syncGroupSelf();
+    if(state.rooms&&state.rooms.length) await syncGroupSelf();
   }
 
   /* ── TICK (display only) ────────────────────────────────────────────────── */
@@ -1241,11 +1179,11 @@
   }
 
   /* ── GROUP SYNC ─────────────────────────────────────────────────────────── */
-  async function _doGroupSync(){
-    if(!state.groupCode) return null;
-    const key = 'group:'+state.groupCode;
+  async function _doGroupSyncForRoom(code, name){
+    if(!code) return null;
+    const key = 'group:'+code;
     try{
-      let cur = { name:state.groupName||state.groupCode, members:{}, resources:[], messages:[] };
+      let cur = { name:name||code, members:{}, resources:[], messages:[] };
       try{
         const r = await window.storage.get(key, true);
         if(r && r.value) cur = JSON.parse(r.value);
@@ -1268,65 +1206,68 @@
         recentLog     : (state.sessionHistory||[]).filter(s=>!s.isLive).slice(0,5)
                           .map(s=>({ ts:s.ts, hours:s.hours, note:(s.note||'').slice(0,200), started_at:s.started_at||null })),
       };
-      if(state.groupName) cur.name = state.groupName;
+      if(name) cur.name = name;
       await window.storage.set(key, JSON.stringify(cur), true);
       return cur;
     }catch(e){ console.error('group sync failed', e); return null; }
   }
 
-  /* syncGroupSelf — immediate, no debounce. Every action writes to the group
-   * blob right away so the room is always in sync with the main timer. */
+  /* syncGroupSelf — writes to ALL joined rooms simultaneously so timer/stats
+   * changes are reflected everywhere at once. */
   async function syncGroupSelf(){
-    if(!state.groupCode) return null;
-    const g = await _doGroupSync();
-    if(g){ cachedGroupData = g; renderRoom(g); }
-    return g;
+    if(!state.rooms||!state.rooms.length) return;
+    const results = await Promise.all(state.rooms.map(r=>_doGroupSyncForRoom(r.code, r.name)));
+    state.rooms.forEach((r,i)=>{ if(results[i]) cachedRoomData[r.code]=results[i]; });
+    for(const room of state.rooms){
+      if(cachedRoomData[room.code]) renderRoomPanel(room.code, cachedRoomData[room.code]);
+    }
   }
 
   /* _flushGroupSync kept as alias for any remaining call sites. */
   async function _flushGroupSync(){ return syncGroupSelf(); }
 
-  async function fetchGroup(){
-    if(!state.groupCode) return null;
+  async function fetchGroupForCode(code){
+    if(!code) return null;
     try{
-      const r = await window.storage.get('group:'+state.groupCode, true);
+      const r = await window.storage.get('group:'+code, true);
       if(r && r.value) return JSON.parse(r.value);
     }catch(e){}
     return null;
   }
 
-  async function addResourceToGroup(title, url){
-    if(!state.groupCode) return null;
-    const key = 'group:'+state.groupCode;
+  async function addResourceToGroup(code, title, url){
+    if(!code) return null;
+    const key = 'group:'+code;
     try{
-      let cur = { name:state.groupName||state.groupCode, members:{}, resources:[], messages:[] };
+      let cur = { name:code, members:{}, resources:[], messages:[] };
       try{ const r=await window.storage.get(key,true); if(r&&r.value) cur=JSON.parse(r.value); }catch(e){}
       cur.resources = cur.resources||[];
       cur.resources.unshift({ id:uid(6), title, url, addedBy:state.id, addedByName:state.name, ts:Date.now() });
       cur.resources = cur.resources.slice(0,30);
       await window.storage.set(key, JSON.stringify(cur), true);
-      return cur; // ← reuse instead of re-fetching
+      return cur;
     }catch(e){ console.error('resource share failed', e); return null; }
   }
 
   const CHAT_MAX_LEN = 500; // hard cap so pasted text can't balloon the room blob / egress
 
-  async function sendChatMessage(){
-    const input = document.getElementById('chatInput');
+  async function sendChatMessage(code){
+    const input = document.getElementById('chatInput-'+code);
+    if(!input) return;
     const text  = input.value.trim().slice(0, CHAT_MAX_LEN);
-    if(!text || !state.groupCode) return;
+    if(!text || !code) return;
     input.value = '';
-    const key = 'group:'+state.groupCode;
+    const key = 'group:'+code;
     try{
-      let cur = { name:state.groupName||state.groupCode, members:{}, resources:[], messages:[] };
+      let cur = { name:code, members:{}, resources:[], messages:[] };
       const r = await window.storage.get(key,true);
       if(r&&r.value) cur=JSON.parse(r.value);
       cur.messages = cur.messages||[];
       cur.messages.push({ sender:state.name, text, ts:Date.now() });
       if(cur.messages.length>50) cur.messages.shift();
       await window.storage.set(key, JSON.stringify(cur), true);
-      forceChatScroll = true;   // user just sent — always jump to bottom
-      renderRoom(cur);          // ← reuse the data we already have, no extra GET
+      getChatState(code).forceChatScroll = true;
+      renderRoomPanel(code, cur);
     }catch(e){ console.error('chat failed', e); }
   }
 
@@ -1409,20 +1350,95 @@
     document.getElementById('resetCountdown').textContent = h+':'+m+':'+s;
   }
 
-  function renderGroupShell(){
-    const inGroup = !!state.groupCode;
-    document.getElementById('friendsEmpty').style.display  = inGroup ? 'none' : 'flex';
-    document.getElementById('roomGrid').style.display      = inGroup ? 'grid' : 'none';
-    document.getElementById('leaveGroupBtn').style.display = inGroup ? 'block': 'none';
-    const codeEl = document.getElementById('groupCodeDisplay');
-    if(inGroup){
-      codeEl.style.display  = 'inline-block';
-      codeEl.textContent    = state.groupCode;
-      document.getElementById('squadSub').textContent = state.groupName||'Active room';
-    } else {
-      codeEl.style.display  = 'none';
-      document.getElementById('squadSub').textContent = 'No room joined';
+  /* ── MIGRATION ──────────────────────────────────────────────────────────── */
+  function migrateRoomsIfNeeded(){
+    // Migrate from legacy single-room (groupCode/groupName) to rooms array
+    let didMigrate = false;
+    if(state.groupCode && (!state.rooms||!state.rooms.length)){
+      state.rooms = [{code:state.groupCode, name:state.groupName||state.groupCode}];
+      didMigrate = true;
     }
+    if('groupCode' in state){ delete state.groupCode; didMigrate = true; }
+    if('groupName' in state){ delete state.groupName; didMigrate = true; }
+    if(!state.rooms) state.rooms = [];
+    // Persist migrated format so old fields don't reappear on next login
+    if(didMigrate) saveProfile();
+  }
+
+  function renderGroupShell(){
+    const rooms    = state.rooms||[];
+    const hasRooms = rooms.length > 0;
+    document.getElementById('friendsEmpty').style.display = hasRooms ? 'none' : 'flex';
+    document.getElementById('squadSub').textContent = hasRooms
+      ? rooms.length+' room'+(rooms.length>1?'s':'')+' joined'
+      : 'No rooms joined';
+
+    const container = document.getElementById('allRoomPanels');
+    // Remove panels for rooms we've left
+    container.querySelectorAll('.room-panel[data-room-code]').forEach(panel=>{
+      if(!rooms.find(r=>r.code===panel.dataset.roomCode)) panel.remove();
+    });
+    // Add panels for new rooms
+    rooms.forEach((room, idx)=>{
+      if(!document.getElementById('room-panel-'+room.code)){
+        const hasSibling = container.children.length > 0 || idx > 0;
+        const panel = createRoomPanel(room.code, room.name||room.code, hasSibling);
+        container.appendChild(panel);
+        // Wire the per-room chat enter-key handler
+        const ci = panel.querySelector('#chatInput-'+room.code);
+        if(ci) ci.onkeydown = (e)=>{ if(e.key==='Enter') sendChatMessage(room.code); };
+        // Immediately populate with cached data if available
+        if(cachedRoomData[room.code]) renderRoomPanel(room.code, cachedRoomData[room.code]);
+      }
+    });
+  }
+
+  function createRoomPanel(code, name, addDivider){
+    const div = document.createElement('div');
+    div.className  = 'room-panel';
+    div.id         = 'room-panel-'+code;
+    div.dataset.roomCode = code;
+    if(addDivider){ div.style.borderTop='1px solid var(--line)'; div.style.marginTop='20px'; div.style.paddingTop='20px'; }
+    else{ div.style.marginTop='8px'; }
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;">${escapeHtml(name)}</span>
+          <span class="group-code-display">${escapeHtml(code)}</span>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="window._leaveRoom('${code}')">Leave room</button>
+      </div>
+      <div class="room-grid">
+        <div>
+          <div class="room-pane-title">Members &amp; 3,000 HR Progress</div>
+          <div class="roster" id="roster-${code}"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card" style="background:var(--panel-2);border:1px solid var(--line);padding:12px;height:220px;display:flex;flex-direction:column;margin:0;">
+            <div class="room-pane-title">Room Live Chat</div>
+            <div id="chatMessages-${code}" style="flex:1;overflow-y:auto;font-size:12px;margin-bottom:8px;display:flex;flex-direction:column;gap:4px;padding-right:4px;"></div>
+            <div style="display:flex;gap:6px;">
+              <input type="text" id="chatInput-${code}" maxlength="500" placeholder="Type a message..." style="padding:6px 10px;height:30px;">
+              <button class="btn btn-primary btn-sm" onclick="sendChatMessage('${code}')" style="padding:4px 10px;height:30px;">Send</button>
+            </div>
+          </div>
+          <div>
+            <div class="room-pane-title">
+              <span>Shared resources</span>
+              <button class="btn btn-sm" onclick="window._openAddResource('${code}')">+ Add link</button>
+            </div>
+            <div class="resources-list" id="resourcesList-${code}"></div>
+          </div>
+        </div>
+        <div style="grid-column:1 / -1;">
+          <div class="room-pane-title" style="margin-top:6px;">
+            <span>Room study log</span>
+            <span style="text-transform:none;letter-spacing:0;font-size:10px;">what everyone's been working on</span>
+          </div>
+          <div class="room-activity-list" id="roomActivityList-${code}"></div>
+        </div>
+      </div>`;
+    return div;
   }
 
   function renderStudyLog(){
@@ -1476,8 +1492,8 @@
   }
 
   /* ── ROSTER RENDERER ────────────────────────────────────────────────────── */
-  function runRosterDOMEngine(group){
-    const roster = document.getElementById('roster');
+  function runRosterDOMEngine(code, group){
+    const roster = document.getElementById('roster-'+code);
     if(!group||!group.members) return;
     const members = Object.entries(group.members).map(([id,m])=>({id,...m}));
     members.sort((a,b)=>b.totalHours-a.totalHours);
@@ -1533,42 +1549,39 @@
     });
   }
 
-  async function renderRoom(realtimeData){
-    if(!state.groupCode) return;
-    
+  async function renderRoomPanel(code, realtimeData){
+    const room = state.rooms && state.rooms.find(r=>r.code===code);
+    if(!room) return;
+
+    // Ensure panel exists
+    if(!document.getElementById('room-panel-'+code)) renderGroupShell();
+
     let group;
-    if (realtimeData && typeof realtimeData === 'object' && realtimeData.members) {
+    if(realtimeData && typeof realtimeData === 'object' && realtimeData.members){
       group = realtimeData;
     } else {
-      group = await fetchGroup();
+      group = await fetchGroupForCode(code);
     }
-    
-    cachedGroupData = group;
-    const resList = document.getElementById('resourcesList');
+
+    cachedRoomData[code] = group;
+    const resList = document.getElementById('resourcesList-'+code);
 
     if(!group||!group.members){
-      document.getElementById('roster').innerHTML = '<div class="empty-mini">No members yet.</div>';
-      resList.innerHTML = '<div class="empty-mini">No resources shared yet.</div>';
+      const roster = document.getElementById('roster-'+code);
+      if(roster) roster.innerHTML = '<div class="empty-mini">No members yet.</div>';
+      if(resList) resList.innerHTML = '<div class="empty-mini">No resources shared yet.</div>';
       return;
     }
 
     // ── Cross-browser timer sync ──────────────────────────────────────────
-    // When a Realtime update arrives, check if the group blob has a newer
-    // timerRecord for OUR OWN user (written by another browser/device).
-    // Only adopt states that are strictly newer AND meaningfully different,
-    // to avoid accumulating stale accumulated_seconds from a previous session.
     if(state.id && group.members[state.id]){
       const remoteTimer = group.members[state.id].timerRecord;
       if(remoteTimer && remoteTimer.written_at){
         const remoteTs = new Date(remoteTimer.written_at).getTime();
         const localTs  = timerRecord.written_at ? new Date(timerRecord.written_at).getTime() : 0;
         if(remoteTs > localTs && remoteTimer.status !== timerRecord.status){
-          const prevStatus = timerRecord.status;
           timerRecord = { ...remoteTimer };
-
           if(timerRecord.status === 'active'){
-            // Another browser started a new session — create the isLive placeholder
-            // if it doesn't already exist so stop/save works correctly here too.
             if(!state.sessionHistory.find(s=>s.isLive)){
               state.sessionHistory.unshift({ ts:Date.now(), hours:0, note:timerRecord.topic||'', isLive:true, started_at: timerRecord.started_at||null });
             }
@@ -1576,8 +1589,6 @@
           } else if(timerRecord.status === 'paused'){
             stopTick();
           } else {
-            // idle — another browser stopped the session. Clear our isLive placeholder
-            // so we don't double-count if the user also had the session open here.
             state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
             stopTick();
           }
@@ -1586,78 +1597,73 @@
       }
     }
 
-    runRosterDOMEngine(group);
+    runRosterDOMEngine(code, group);
 
     /* chat ── left/right bubbles + smart-scroll + toast notifications */
-    const chatBox  = document.getElementById('chatMessages');
+    const chatBox  = document.getElementById('chatMessages-'+code);
+    const chatState = getChatState(code);
     const messages = group.messages||[];
 
-    // Smart-scroll: was the user already near the bottom (≤ 50 px away)?
-    const nearBottom = chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight <= 50;
-    const shouldScroll = forceChatScroll || nearBottom;
-    forceChatScroll = false;
+    if(chatBox){
+      const nearBottom = chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight <= 50;
+      const shouldScroll = chatState.forceChatScroll || nearBottom;
+      chatState.forceChatScroll = false;
 
-    // Smart UI Check: Is the user looking at a completely different system component/tab?
-    const roomTabActive = document.querySelector('.nav-item[data-target="roomSection"]')?.classList.contains('active');
-    const userIsAway = document.hidden || !roomTabActive;
+      const roomTabActive = document.querySelector('.nav-item[data-target="roomSection"]')?.classList.contains('active');
+      const userIsAway = document.hidden || !roomTabActive;
 
-    // New-message notifications — only AFTER the first full render
-    if(chatInitialized){
-      messages.forEach(msg=>{
-        if((msg.ts||0) > lastSeenMessageTs && msg.sender !== state.name){
-          // Maintain default fallback toast
-          showToast('New Message 💬', msg.sender+': '+msg.text);
-
-          // Premium Desktop Notification Implementation
-          if(userIsAway){
-            playNotificationSound();
-            if('Notification' in window && Notification.permission === 'granted'){
-              new Notification(`New Message from ${msg.sender}`, {
-                body: msg.text,
-                tag: 'studygrid-chat' // Deduplicates window stack groupings
-              });
+      if(chatState.chatInitialized){
+        messages.forEach(msg=>{
+          if((msg.ts||0) > chatState.lastSeenMessageTs && msg.sender !== state.name){
+            showToast('New Message 💬', msg.sender+': '+msg.text);
+            if(userIsAway){
+              playNotificationSound();
+              if('Notification' in window && Notification.permission === 'granted'){
+                new Notification(`New Message from ${msg.sender}`, {
+                  body: msg.text,
+                  tag: 'studygrid-chat-'+code
+                });
+              }
             }
           }
-        }
+        });
+      }
+      const maxTs = messages.reduce((acc,m)=>Math.max(acc,m.ts||0), 0);
+      if(maxTs > chatState.lastSeenMessageTs) chatState.lastSeenMessageTs = maxTs;
+      chatState.chatInitialized = true;
+
+      chatBox.innerHTML='';
+      messages.forEach(msg=>{
+        const isMine = msg.sender === state.name;
+        const mDiv   = document.createElement('div');
+        mDiv.className = 'chat-msg '+(isMine?'mine':'theirs');
+        mDiv.innerHTML = `<div class="chat-sender">${escapeHtml(msg.sender)}</div><div class="chat-bubble">${escapeHtml(msg.text)}</div>`;
+        chatBox.appendChild(mDiv);
       });
+      if(shouldScroll) chatBox.scrollTop = chatBox.scrollHeight;
     }
-
-    // Advance the watermark to the newest message we've now seen
-    const maxTs = messages.reduce((acc,m)=>Math.max(acc,m.ts||0), 0);
-    if(maxTs > lastSeenMessageTs) lastSeenMessageTs = maxTs;
-    chatInitialized = true;
-
-    // Rebuild bubble DOM
-    chatBox.innerHTML='';
-    messages.forEach(msg=>{
-      const isMine = msg.sender === state.name;
-      const mDiv   = document.createElement('div');
-      mDiv.className = 'chat-msg '+(isMine?'mine':'theirs');
-      mDiv.innerHTML = `<div class="chat-sender">${escapeHtml(msg.sender)}</div><div class="chat-bubble">${escapeHtml(msg.text)}</div>`;
-      chatBox.appendChild(mDiv);
-    });
-
-    if(shouldScroll) chatBox.scrollTop = chatBox.scrollHeight;
 
     /* resources */
     const resources = group.resources||[];
-    if(!resources.length){
-      resList.innerHTML='<div class="empty-mini">No resources shared yet.</div>';
-    } else {
-      resList.innerHTML='';
-      resources.forEach(r=>{
-        const row = document.createElement('div');
-        row.className = 'resource-row';
-        const safeUrl = (r.url||'').startsWith('http') ? r.url : '#';
-        row.innerHTML=`
-          <div class="resource-icon">📄</div>
-          <div class="resource-info">
-            <a class="resource-title" href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">${escapeHtml(r.title||'Untitled link')}</a>
-            <div class="resource-meta">shared by ${escapeHtml(r.addedByName||'someone')} · ${timeAgo(r.ts)}</div>
-          </div>
-        `;
-        resList.appendChild(row);
-      });
+    if(resList){
+      if(!resources.length){
+        resList.innerHTML='<div class="empty-mini">No resources shared yet.</div>';
+      } else {
+        resList.innerHTML='';
+        resources.forEach(r=>{
+          const row = document.createElement('div');
+          row.className = 'resource-row';
+          const safeUrl = (r.url||'').startsWith('http') ? r.url : '#';
+          row.innerHTML=`
+            <div class="resource-icon">📄</div>
+            <div class="resource-info">
+              <a class="resource-title" href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">${escapeHtml(r.title||'Untitled link')}</a>
+              <div class="resource-meta">shared by ${escapeHtml(r.addedByName||'someone')} · ${timeAgo(r.ts)}</div>
+            </div>
+          `;
+          resList.appendChild(row);
+        });
+      }
     }
 
     /* room activity log */
@@ -1666,33 +1672,35 @@
       (m.recentLog||[]).forEach(s=>activity.push({id, name:m.name, ts:s.ts, hours:s.hours, note:s.note, started_at:s.started_at||null}));
     });
     activity.sort((a,b)=>b.ts-a.ts);
-    const activityFeed = document.getElementById('roomActivityList');
-    if(!activity.length){
-      activityFeed.innerHTML='<div class="empty-mini">No study sessions logged in this room yet.</div>';
-    } else {
-      activityFeed.innerHTML='';
-      activity.slice(0,30).forEach(s=>{
-        const d = new Date(s.ts);
-        const endTime   = d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
-        const dateLabel = d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
-        let dateStr;
-        if(s.started_at){
-          const sd = new Date(s.started_at);
-          const startTime = sd.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
-          dateStr = dateLabel + ' · ' + startTime + '–' + endTime;
-        } else {
-          dateStr = dateLabel + ' · ' + endTime;
-        }
-        const row = document.createElement('div');
-        row.className='log-row';
-        const who = escapeHtml(s.name)+(s.id===state.id?' (you)':'');
-        row.innerHTML=`
-          <div class="ld-date">${dateStr}</div>
-          <div class="ld-hours mono">${fmtHours(s.hours)}</div>
-          <div class="ld-note"><span class="who">${who}</span> — ${s.note?escapeHtml(s.note):'No notes added'}</div>
-        `;
-        activityFeed.appendChild(row);
-      });
+    const activityFeed = document.getElementById('roomActivityList-'+code);
+    if(activityFeed){
+      if(!activity.length){
+        activityFeed.innerHTML='<div class="empty-mini">No study sessions logged in this room yet.</div>';
+      } else {
+        activityFeed.innerHTML='';
+        activity.slice(0,30).forEach(s=>{
+          const d = new Date(s.ts);
+          const endTime   = d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+          const dateLabel = d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+          let dateStr;
+          if(s.started_at){
+            const sd = new Date(s.started_at);
+            const startTime = sd.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+            dateStr = dateLabel + ' · ' + startTime + '–' + endTime;
+          } else {
+            dateStr = dateLabel + ' · ' + endTime;
+          }
+          const row = document.createElement('div');
+          row.className='log-row';
+          const who = escapeHtml(s.name)+(s.id===state.id?' (you)':'');
+          row.innerHTML=`
+            <div class="ld-date">${dateStr}</div>
+            <div class="ld-hours mono">${fmtHours(s.hours)}</div>
+            <div class="ld-note"><span class="who">${who}</span> — ${s.note?escapeHtml(s.note):'No notes added'}</div>
+          `;
+          activityFeed.appendChild(row);
+        });
+      }
     }
   }
 
@@ -1716,9 +1724,8 @@
     await flushProfileSave();
     render();
 
-    if(state.groupCode){
-      const g = await _doGroupSync();
-      if(g) renderRoom(g);
+    if(state.rooms&&state.rooms.length){
+      await syncGroupSelf();
     }
 
     const newLevel     = getLevelInfo(state.totalXP).level;
@@ -1760,7 +1767,8 @@
         render();
         // Use _doGroupSync() directly — import never sets a pending sync timer,
         // so _flushGroupSync() would return null and skip the room update.
-        if(state.groupCode){ await _doGroupSync(); startGroupPolling(); }
+        migrateRoomsIfNeeded();
+        if(state.rooms&&state.rooms.length){ await syncGroupSelf(); startGroupPolling(); }
       }catch(err){ alert('Invalid backup file.'); }
     };
     reader.readAsText(file);
@@ -1792,15 +1800,24 @@
     });
   }
 
-  /* ── GROUP REALTIME (no polling — one fetch + one live subscription) ─────── */
+  /* ── GROUP REALTIME (multi-room — one subscription per joined room) ───────── */
   function startGroupPolling(){
-    stopGroupPolling();
-    if(!state.groupCode) return;
-    renderRoom();
-    if(window.subscribeGroupRealtime) window.subscribeGroupRealtime(state.groupCode, renderRoom);
+    const rooms = state.rooms||[];
+    if(!rooms.length) return;
+    // Initial render for all rooms
+    rooms.forEach(r=>renderRoomPanel(r.code));
+    // Subscribe to realtime updates for each room code
+    if(window.subscribeAllRooms){
+      window.subscribeAllRooms(rooms.map(r=>r.code), (code, rawValue)=>{
+        let parsed;
+        if(rawValue && typeof rawValue === 'object' && rawValue.members) parsed = rawValue;
+        else if(rawValue && typeof rawValue === 'string') try{ parsed=JSON.parse(rawValue); }catch(e){}
+        renderRoomPanel(code, parsed);
+      });
+    }
   }
   function stopGroupPolling(){
-    if(window.unsubscribeGroupRealtime) window.unsubscribeGroupRealtime();
+    if(window.unsubscribeAllRooms) window.unsubscribeAllRooms();
   }
 
   /* ── WIRE EVENTS ────────────────────────────────────────────────────────── */
@@ -1838,7 +1855,7 @@
       await persistTimer();
       state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
       saveProfile(); render(); closeModal('logModal');
-      if(state.groupCode) await syncGroupSelf();
+      if(state.rooms&&state.rooms.length) await syncGroupSelf();
     };
     document.getElementById('logSubmit').onclick = async ()=>{
       const elapsedMs = pendingTimerHours; // stored as raw ms since last fix
@@ -1881,7 +1898,7 @@
       if(goal>0) state.dailyGoalHours = goal;
       saveProfile(); // debounced — no need to await
       render();
-      if(state.groupCode) syncGroupSelf(); // debounced — collapses with profile save timing
+      if(state.rooms&&state.rooms.length) syncGroupSelf();
       closeModal('settingsModal');
     };
     document.getElementById('exportBtn').onclick = exportBackup;
@@ -1907,9 +1924,7 @@
       location.reload();
     };
 
-    /* chat */
-    document.getElementById('sendChatBtn').onclick = sendChatMessage;
-    document.getElementById('chatInput').onkeydown = (e)=>{ if(e.key==='Enter') sendChatMessage(); };
+    /* chat — per-room handlers are wired in createRoomPanel() */
 
     /* levels */
     document.getElementById('openLevelsModalBtn').onclick = ()=>{ populateLevelsModal(); openModal('levelsModal'); };
@@ -1927,47 +1942,70 @@
 
     document.getElementById('openGroupModalBtn').onclick = ()=>openModal('groupModal');
     document.getElementById('groupCancel').onclick       = ()=>closeModal('groupModal');
-    document.getElementById('leaveGroupBtn').onclick     = async ()=>{
-      if(!confirm('Leave this room?')) return;
-      state.groupCode=null; state.groupName=null;
-      await saveProfile(); stopGroupPolling(); render();
-    };
+
     document.getElementById('groupSubmit').onclick = async ()=>{
       const activeTab = document.querySelector('#groupModal .tab.active').dataset.tab;
       if(activeTab==='join'){
         const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
         if(!code) return;
-        state.groupCode=code; state.groupName=null;
+        if((state.rooms||[]).find(r=>r.code===code)){ showToast('Already joined','You are already in room '+code); closeModal('groupModal'); return; }
+        const tmpState = { ...state, rooms:[...(state.rooms||[]), {code, name:null}] };
+        state = tmpState;
         await saveProfile();
-        const g = await syncGroupSelf();
-        if(g&&g.name){ state.groupName=g.name; await saveProfile(); }
+        // fetch room name
+        const g = await fetchGroupForCode(code);
+        const roomName = (g&&g.name) ? g.name : code;
+        state.rooms = state.rooms.map(r=>r.code===code ? {code, name:roomName} : r);
+        await saveProfile();
+        await syncGroupSelf();
       } else {
         const name = document.getElementById('createNameInput').value.trim()||'My Room';
         const code = uid(4);
-        state.groupCode=code; state.groupName=name;
+        if((state.rooms||[]).find(r=>r.code===code)){ showToast('Already joined','You are already in room '+code); closeModal('groupModal'); return; }
+        state.rooms = [...(state.rooms||[]), {code, name}];
         await saveProfile(); await syncGroupSelf();
         showToast('Room created','Share code '+code+' with your study group');
       }
       closeModal('groupModal'); render(); startGroupPolling();
     };
 
-    document.getElementById('addResourceBtn').onclick  = ()=>{ document.getElementById('resourceTitleInput').value=''; document.getElementById('resourceUrlInput').value=''; openModal('resourceModal'); };
-    document.getElementById('resourceCancel').onclick  = ()=>closeModal('resourceModal');
-    document.getElementById('resourceSubmit').onclick  = async ()=>{
+    /* global leave-room and add-resource handlers, exposed as window fns */
+    window._leaveRoom = async (code)=>{
+      if(!confirm('Leave room '+code+'?')) return;
+      state.rooms = (state.rooms||[]).filter(r=>r.code!==code);
+      delete cachedRoomData[code];
+      if(groupRealtimeChannels[code]){ sb&&sb.removeChannel(groupRealtimeChannels[code]); delete groupRealtimeChannels[code]; }
+      // Remove panel from DOM immediately
+      const panel = document.getElementById('room-panel-'+code);
+      if(panel) panel.remove();
+      await saveProfile(); render();
+    };
+
+    window._openAddResource = (code)=>{
+      pendingResourceCode = code;
+      document.getElementById('resourceTitleInput').value='';
+      document.getElementById('resourceUrlInput').value='';
+      openModal('resourceModal');
+    };
+
+    document.getElementById('resourceCancel').onclick = ()=>{ pendingResourceCode=null; closeModal('resourceModal'); };
+    document.getElementById('resourceSubmit').onclick = async ()=>{
       const title = document.getElementById('resourceTitleInput').value.trim();
       const url   = document.getElementById('resourceUrlInput').value.trim();
       if(!title||!url||!/^https?:\/\//i.test(url)){ alert('Enter a valid URL starting with http:// or https://'); return; }
+      if(!pendingResourceCode){ closeModal('resourceModal'); return; }
+      const code = pendingResourceCode; pendingResourceCode = null;
       closeModal('resourceModal');
-      const g = await addResourceToGroup(title, url);
+      const g = await addResourceToGroup(code, title, url);
       showToast('Resource shared','Link added to the room');
-      renderRoom(g); // ← reuse, no extra GET
+      if(g) renderRoomPanel(code, g);
     };
   }
 
   /* ── ONBOARDING ─────────────────────────────────────────────────────────── */
   async function maybeOnboard(){
     if(state.id&&state.name){
-      render(); if(state.groupCode) startGroupPolling(); return;
+      migrateRoomsIfNeeded(); render(); if(state.rooms&&state.rooms.length) startGroupPolling(); return;
     }
     openModal('onboardModal');
     document.getElementById('onboardSubmit').onclick = async ()=>{
@@ -1983,35 +2021,25 @@
         const saved = JSON.parse(cloudData.value);
         if(saved.password&&saved.password!==password){ alert('Incorrect password. Please try again.'); return; }
         state = Object.assign(state, saved);
+        migrateRoomsIfNeeded();
 
-        // ── Recover sessions that landed in group blob but not in profile ────
-        // Only sessions whose ts is not known AND whose hours aren't already
-        // accounted for in totalHours are recovered. We compare against the
-        // profile's totalHours to avoid stacking hours that were already saved.
-        if(state.groupCode){
+        // ── Recover sessions that landed in group blobs but not in profile ──
+        const rooms = state.rooms||[];
+        for(const room of rooms){
           try{
-            const groupRaw = await window.storage.get('group:'+state.groupCode, true);
+            const groupRaw = await window.storage.get('group:'+room.code, true);
             if(groupRaw && groupRaw.value){
               const group  = JSON.parse(groupRaw.value);
               const member = group.members && group.members[state.id];
               if(member && Array.isArray(member.recentLog)){
                 const knownTs = new Set((state.sessionHistory||[]).map(s=>s.ts));
-                // A session is only "missing" if its ts is unknown AND it is not
-                // an isLive ghost (hours===0). Never recover zero-hour entries.
                 const missing = member.recentLog.filter(s => s.ts && s.hours > 0 && !knownTs.has(s.ts));
                 if(missing.length > 0){
-                  // Cross-check: the profile totalHours already includes these if
-                  // the profile was saved after the session. Only credit hours that
-                  // would genuinely be lost (i.e. profile totalHours < group total).
-                  const groupTotal = missing.reduce((sum,s)=>sum+s.hours, 0);
                   const profileTotal = state.totalHours || 0;
-                  // Sum of all known session hours in profile history
                   const knownTotal = (state.sessionHistory||[]).filter(s=>!s.isLive).reduce((sum,s)=>sum+(s.hours||0), 0);
                   missing.forEach(s => {
                     state.sessionHistory = state.sessionHistory || [];
                     state.sessionHistory.unshift({ ts:s.ts, hours:s.hours, note:s.note||'' });
-                    // Only add to totals if profile totalHours doesn't already reflect this
-                    // (i.e. profile was saved before the session was written to group blob)
                     const alreadyCounted = profileTotal >= knownTotal + s.hours;
                     if(!alreadyCounted){
                       state.totalHours += s.hours;
@@ -2021,11 +2049,11 @@
                       state.dailyLog[dayKey] = (state.dailyLog[dayKey]||0) + s.hours;
                     }
                   });
-                  showToast('Session recovered ✓', 'Room log synced on login');
+                  showToast('Session recovered ✓', 'Room '+room.code+' log synced');
                 }
               }
             }
-          }catch(e){ console.warn('reconcile failed', e); }
+          }catch(e){ console.warn('reconcile failed for room '+room.code, e); }
         }
 
         showToast('Cloud profile loaded','Welcome back, '+state.name+'!');
@@ -2034,18 +2062,16 @@
         state.name           = name;
         state.password       = password;
         state.dailyGoalHours = goal;
+        state.rooms          = [];
       }
       saveProfile();
-      await flushProfileSave(); // critical — flush immediately on first-time setup
+      await flushProfileSave();
       closeModal('onboardModal');
-      // Restore timer from server NOW — state.id is valid after cloud profile load.
-      // This is the key fix: on a fresh browser, loadPersistedTimer() must run
-      // AFTER the profile is fetched, not before (boot() runs before login completes).
       const hadTimer = await loadPersistedTimer();
       if(hadTimer){ restoreTimerUI(); } else { applyTimerUI(); }
-      if(state.groupCode){ try{ await syncGroupSelf(); }catch(e){} }
+      if(state.rooms&&state.rooms.length){ try{ await syncGroupSelf(); }catch(e){} }
       render();
-      if(state.groupCode) startGroupPolling();
+      if(state.rooms&&state.rooms.length) startGroupPolling();
     };
   }
 
@@ -2066,29 +2092,26 @@
     // restore runs inside onboardSubmit above instead, after the cloud profile
     // is fetched and state.id is known).
     if(state.id){
+      migrateRoomsIfNeeded();
       const hadTimer = await loadPersistedTimer();
       if(hadTimer){ restoreTimerUI(); } else { applyTimerUI(); }
-      if(state.groupCode){ try{ await syncGroupSelf(); }catch(e){} }
+      if(state.rooms&&state.rooms.length){ try{ await syncGroupSelf(); }catch(e){} }
     }
 
-    // ── Eagerly load group data so the roster is populated immediately on boot ──
-    // Without this, cachedGroupData is null until startGroupPolling fires its
-    // async renderRoom, causing a blank roster during the first few seconds.
-    if(state.groupCode){
-      try{
-        const g = await fetchGroup();
-        if(g) cachedGroupData = g;
-      }catch(e){}
+    // ── Eagerly load all room data so rosters are populated on boot ──────
+    if(state.rooms&&state.rooms.length){
+      await Promise.all((state.rooms||[]).map(async r=>{
+        try{ const g=await fetchGroupForCode(r.code); if(g) cachedRoomData[r.code]=g; }catch(e){}
+      }));
     }
 
-    // ── 1-second loop: countdown + extrapolated friend timers in roster ───
+    // ── 1-second loop: countdown + extrapolated friend timers in rosters ─
     setInterval(()=>{
       renderCountdown();
-      // Re-render the roster every second so friend clocks tick smoothly
-      // (we extrapolate from their timerRecord.started_at, no Supabase call)
-      if(state.groupCode && cachedGroupData){
-        runRosterDOMEngine(cachedGroupData);
-      }
+      // Re-render each room's roster every second so friend clocks tick
+      (state.rooms||[]).forEach(r=>{
+        if(cachedRoomData[r.code]) runRosterDOMEngine(r.code, cachedRoomData[r.code]);
+      });
     }, 1000);
 
     // Full local render refresh every 5 minutes (pure DOM — no Supabase calls)
@@ -2132,11 +2155,11 @@
   window.addEventListener('beforeunload', () => {
     if(typeof flushProfileSave  === 'function') flushProfileSave();
     if(typeof flushPersistTimer === 'function') flushPersistTimer();
-    // Sync idle state to the group blob so peers stop seeing us as online
-    if(timerRecord.status === 'idle' && state.groupCode){
-      // Fire-and-forget: beforeunload is synchronous, we can't await,
-      // but modern browsers will let in-flight fetch() complete for a few seconds.
-      _doGroupSync().catch(()=>{});
+    // Sync idle state to all room blobs so peers stop seeing us as online
+    if(timerRecord.status === 'idle' && state.rooms && state.rooms.length){
+      // Fire-and-forget: beforeunload can't await, but modern browsers let
+      // in-flight fetch() complete for a few seconds.
+      syncGroupSelf().catch(()=>{});
     }
   });
 
