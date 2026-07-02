@@ -629,8 +629,16 @@
    */
   window.clockOffsetMs = 0; // shared across all script blocks — see syncedNow() below
 
+  // TRUE when the last getServerNow() call actually got a value from Postgres.
+  // FALSE means the returned value is a LOCAL-CLOCK FALLBACK, not real server
+  // time — callers about to write an authoritative timestamp (start/pause/
+  // resume/stop) must check this and refuse to silently treat a fallback as
+  // if it were server-verified. This is what previously let "server time"
+  // quietly become "device time" with zero indication anywhere in the UI.
+  window.lastServerSyncOK = false;
+
   window.getServerNow = async function(){
-    if(!sb) return new Date().toISOString();
+    if(!sb){ window.lastServerSyncOK = false; return new Date().toISOString(); }
     try{
       const localBefore = Date.now();
       const { data, error } = await sb.rpc('get_server_time');
@@ -640,13 +648,16 @@
         // Use the midpoint of the request to roughly cancel out one-way network latency.
         const localMid = (localBefore + localAfter) / 2;
         window.clockOffsetMs = serverMs - localMid;
+        window.lastServerSyncOK = true;
         return data;
       }
       console.warn('STUDYGRID: get_server_time RPC failed, falling back to local clock', error);
     }catch(e){
       console.warn('STUDYGRID: get_server_time RPC threw, falling back to local clock', e);
     }
-    // Fallback: use client time (better than nothing, same as before)
+    // Fallback: use client time (better than nothing, but NOT server-verified —
+    // mark it so callers can refuse to anchor start/pause/resume/stop on it).
+    window.lastServerSyncOK = false;
     return new Date().toISOString();
   };
 
@@ -686,6 +697,32 @@
     if(!sb) return;
     Object.values(groupRealtimeChannels).forEach(ch=>sb.removeChannel(ch));
     groupRealtimeChannels = {};
+  };
+
+  /* ── OWN-TIMER REALTIME ────────────────────────────────────────────────────
+   * Room data gets a realtime subscription (above), but the user's PERSONAL
+   * timer key (timer:<userId>) previously did not — it was only ever read
+   * once, at boot. That meant if the same account was open in two tabs, or
+   * on a phone AND a laptop, starting/pausing/stopping on one device left
+   * every other already-open tab showing stale local state until it was
+   * reloaded — and if both wrote at nearly the same time, the loser's write
+   * was silently discarded (last-write-wins) with no one told. Subscribing
+   * here makes every already-open tab adopt the server's timer record the
+   * moment it changes, so the server truly stays the single parent record
+   * instead of just being "the thing read once on load".
+   * ════════════════════════════════════════════════════════════════════════ */
+  let ownTimerChannel = null;
+  window.subscribeOwnTimer = function(userId, onChange){
+    if(!sb || !userId) return;
+    if(ownTimerChannel){ sb.removeChannel(ownTimerChannel); ownTimerChannel = null; }
+    ownTimerChannel = sb.channel('own-timer-'+userId)
+      .on('postgres_changes', { event:'*', schema:'public', table:'studygrid_kv', filter:'key=eq.timer:'+userId }, (payload)=>{
+        onChange(payload.new?.value ?? null);
+      })
+      .subscribe();
+  };
+  window.unsubscribeOwnTimer = function(){
+    if(ownTimerChannel){ sb.removeChannel(ownTimerChannel); ownTimerChannel = null; }
   };
 </script>
 
@@ -881,11 +918,27 @@
   /** Write current timerRecord to Supabase immediately. No debounce.
    * Always stamps `written_at` so peers can detect stale timer entries. */
   async function persistTimer(){
-    if(!state.id || !sb) return;
+    if(!state.id || !sb) return false;
     const payload = { ...timerRecord, written_at: new Date().toISOString() };
-    await window.storage.set(timerCloudKey(), JSON.stringify(payload), true);
+    const ok = await window.storage.set(timerCloudKey(), JSON.stringify(payload), true);
+    return !!ok;
   }
-  async function flushPersistTimer(){ await persistTimer(); }
+  async function flushPersistTimer(){ return await persistTimer(); }
+
+  /** persistTimer() with one retry. Start/pause/resume/stop all anchor the
+   * timer's truth in the DB — if the write never lands, the local UI would
+   * show "running" while the server still thinks "idle" (or vice versa),
+   * which is exactly the local-vs-server divergence this app must avoid.
+   * One retry covers a transient blip; if it still fails we tell the caller
+   * so it can warn the user instead of pretending the action succeeded. */
+  async function persistTimerOrWarn(actionLabel){
+    let ok = await persistTimer();
+    if(!ok) ok = await persistTimer(); // one retry
+    if(!ok){
+      showToast('Not saved to server', actionLabel+' could not be written to the server. Your connection may be down — please check it and try again, otherwise this session may not be tracked correctly.');
+    }
+    return ok;
+  }
 
   /**
    * On boot: fetch the persisted timer state from Supabase.
@@ -937,6 +990,15 @@
     // This prevents phone clock drift and mobile browser time freeze from
     // corrupting the elapsed calculation. The database is now the time source.
     const serverNow = await window.getServerNow();
+    if(!window.lastServerSyncOK){
+      // getServerNow() silently fell back to the device clock (network down,
+      // RPC missing, etc). Anchoring "started_at" on an unverified local
+      // timestamp is exactly the bug this app is supposed to have fixed —
+      // refuse to start rather than silently starting on the wrong clock.
+      topicEl.disabled = false;
+      showToast('Can\'t reach server clock', 'Timer needs to sync with the server before starting. Check your connection and try again.');
+      return;
+    }
 
     timerRecord = {
       status             : 'active',
@@ -944,8 +1006,15 @@
       accumulated_seconds: 0,
       topic,
     };
-    // Flush immediately — no debounce, no fire-and-forget.
-    await persistTimer();
+    // Flush immediately — no debounce, no fire-and-forget. If this never
+    // reaches the server, the local UI must not pretend the timer is running.
+    const persisted = await persistTimerOrWarn('Starting the timer');
+    if(!persisted){
+      timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
+      topicEl.disabled = false;
+      applyTimerUI();
+      return;
+    }
 
     // Live placeholder in session history — store started_at so the log
     // can show "Started at HH:MM" and we can detect ghost entries on restore.
@@ -963,6 +1032,14 @@
     // SERVER TIME: compute accumulated seconds using server clock so
     // mobile browser suspension doesn't truncate the paused duration.
     const serverNow   = await window.getServerNow();
+    if(!window.lastServerSyncOK){
+      // Same reasoning as startTimer(): a local-clock fallback here would
+      // mix a server-anchored started_at with a device-anchored stop point,
+      // producing a segment that's wrong in whatever direction the device
+      // clock is skewed. Keep the timer running instead of banking bad time.
+      showToast('Can\'t reach server clock', 'Pause needs to sync with the server — timer kept running. Check your connection and try again.');
+      return;
+    }
     const startedAtMs = new Date(timerRecord.started_at).getTime();
     const serverMs    = new Date(serverNow).getTime();
     const segmentMs   = Math.max(0, serverMs - startedAtMs);
@@ -974,12 +1051,21 @@
       showToast('Pause failed', 'Time sync looked wrong — timer kept running. Try again.');
       return;
     }
+    const prevRecord = { ...timerRecord }; // for rollback if the write fails
     const segmentSec = Math.floor(segmentMs / 1000);
     timerRecord.accumulated_seconds = (timerRecord.accumulated_seconds || 0) + segmentSec;
     timerRecord.started_at          = null;
     timerRecord.status              = 'paused';
     stopTick();
-    await persistTimer();
+    const persisted = await persistTimerOrWarn('Pausing the timer');
+    if(!persisted){
+      // Roll back local state so it doesn't diverge from what the server
+      // actually has on record — keep ticking as "active" instead.
+      timerRecord = prevRecord;
+      startTick();
+      applyTimerUI();
+      return;
+    }
     applyTimerUI();
     await syncGroupSelf();
   }
@@ -989,9 +1075,20 @@
     if(timerRecord.status!=='paused') return;
     // SERVER TIME: same reason as startTimer — use server clock on every resume
     // so pause→resume gaps are measured against the same clock as started_at.
-    timerRecord.started_at = await window.getServerNow();
+    const serverNow = await window.getServerNow();
+    if(!window.lastServerSyncOK){
+      showToast('Can\'t reach server clock', 'Resume needs to sync with the server before continuing. Check your connection and try again.');
+      return;
+    }
+    const prevRecord = { ...timerRecord };
+    timerRecord.started_at = serverNow;
     timerRecord.status     = 'active';
-    await persistTimer();
+    const persisted = await persistTimerOrWarn('Resuming the timer');
+    if(!persisted){
+      timerRecord = prevRecord; // stay paused rather than diverge from the server
+      applyTimerUI();
+      return;
+    }
     startTick();
     applyTimerUI();
     await syncGroupSelf();
@@ -1013,10 +1110,20 @@
     let elapsedMs;
     let segmentBad = false;
     if(snapshotRecord.status === 'active' && snapshotRecord.started_at){
-      const serverStopIso = await window.getServerNow();
+      let serverStopIso = await window.getServerNow();
+      if(!window.lastServerSyncOK) serverStopIso = await window.getServerNow(); // one retry — covers a transient blip
       const serverStopMs  = new Date(serverStopIso).getTime();
       const startedAtMs   = new Date(snapshotRecord.started_at).getTime();
       const segmentMs     = Math.max(0, serverStopMs - startedAtMs);
+      // If getServerNow() couldn't reach the server, serverStopIso is a LOCAL
+      // fallback timestamp being subtracted from a SERVER-anchored started_at.
+      // That mixes two different clocks — the result can look perfectly
+      // plausible (pass isPlausibleSegmentMs) and still be wrong by however
+      // much the device clock is skewed. Treat it as untrustworthy too.
+      if(!window.lastServerSyncOK){
+        console.error('STUDYGRID: stop time not server-verified, discarding segment', {segmentMs, started_at: snapshotRecord.started_at, serverStopIso});
+        segmentBad = true;
+      }
       if(!isPlausibleSegmentMs(segmentMs)){
         segmentBad = true;
         console.error('STUDYGRID: implausible stop segment discarded', {segmentMs, started_at: snapshotRecord.started_at, serverStopIso});
@@ -1065,6 +1172,47 @@
     document.getElementById('logNoteInput').value = '';
     openModal('logModal');
     if(state.rooms&&state.rooms.length) await syncGroupSelf();
+  }
+
+  /** Called when Supabase Realtime reports the timer:<userId> row changed —
+   * i.e. this same account started/paused/resumed/stopped the timer from a
+   * DIFFERENT tab or device. Adopts the server's record as truth here too,
+   * instead of leaving this tab's UI contradicting what the server (and any
+   * other open tab) now says. Ignores echoes of this tab's own writes. */
+  function handleRemoteTimerUpdate(rawValue){
+    if(!state.id || !rawValue) return;
+    let saved;
+    try{ saved = typeof rawValue === 'string' ? JSON.parse(rawValue) : rawValue; }catch(e){ return; }
+    if(!saved || typeof saved !== 'object' || !saved.status) return;
+
+    const same = saved.status === timerRecord.status
+              && (saved.started_at||null) === (timerRecord.started_at||null)
+              && (saved.accumulated_seconds||0) === (timerRecord.accumulated_seconds||0)
+              && (saved.topic||'') === (timerRecord.topic||'');
+    if(same) return; // echo of our own write — nothing changed
+
+    const topicEl = document.getElementById('preSessionTopic');
+    timerRecord = { status: saved.status, started_at: saved.started_at||null, accumulated_seconds: saved.accumulated_seconds||0, topic: saved.topic||'' };
+
+    if(timerRecord.status === 'active'){
+      topicEl.disabled = true;
+      if(!state.sessionHistory.find(s=>s.isLive)){
+        state.sessionHistory.unshift({ ts:Date.now(), hours:0, note:timerRecord.topic, isLive:true, started_at: timerRecord.started_at||null });
+      }
+      startTick();
+    } else if(timerRecord.status === 'paused'){
+      topicEl.disabled = true;
+      stopTick();
+    } else {
+      // Remote stop/cancel — drop the live placeholder here too.
+      stopTick();
+      state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
+      topicEl.disabled = false;
+      topicEl.value = '';
+    }
+    applyTimerUI();
+    if(state.sessionHistory.find(s=>s.isLive) || timerRecord.status==='idle') renderStudyLog();
+    showToast('Timer synced', 'Updated from another device or tab.');
   }
 
   /* ── TICK (display only) ────────────────────────────────────────────────── */
@@ -1995,6 +2143,7 @@
       // Flush any pending writes before clearing local state
       await flushProfileSave();
       await flushPersistTimer();
+      if(window.unsubscribeOwnTimer) window.unsubscribeOwnTimer();
       // Clear localStorage only — Supabase data is untouched
       try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
       location.reload();
@@ -2153,6 +2302,7 @@
       await window.getServerNow(); // prime clock offset before any elapsed-time math runs
       const hadTimer = await loadPersistedTimer();
       if(hadTimer){ restoreTimerUI(); } else { applyTimerUI(); }
+      if(window.subscribeOwnTimer) window.subscribeOwnTimer(state.id, handleRemoteTimerUpdate);
       if(state.rooms&&state.rooms.length){ try{ await syncGroupSelf(); }catch(e){} }
       render();
       if(state.rooms&&state.rooms.length) startGroupPolling();
@@ -2180,6 +2330,7 @@
       await window.getServerNow(); // prime clock offset before any elapsed-time math runs
       const hadTimer = await loadPersistedTimer();
       if(hadTimer){ restoreTimerUI(); } else { applyTimerUI(); }
+      if(window.subscribeOwnTimer) window.subscribeOwnTimer(state.id, handleRemoteTimerUpdate);
       if(state.rooms&&state.rooms.length){ try{ await syncGroupSelf(); }catch(e){} }
     }
 
