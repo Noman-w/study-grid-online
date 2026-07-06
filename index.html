@@ -1371,11 +1371,63 @@
 
     return !!state.id;
   }
+
+  /* ── RECONCILE (anti-clobber) ──────────────────────────────────────────
+   * THE BUG THIS FIXES: every cloud write used to be "take whatever is in
+   * this tab's memory and overwrite the whole profile row with it." If a
+   * second tab/device (phone left open, background tab, etc.) held an
+   * OLDER copy of `state` and wrote AFTER a fresher save from elsewhere,
+   * its stale sessionHistory/totalHours silently replaced the newer data —
+   * a finished session (and the hours that came with it) could vanish.
+   *
+   * THE FIX: never blind-overwrite. Right before any write, pull the
+   * current cloud copy, MERGE sessionHistory as a union keyed by `ts`
+   * (nothing is ever dropped — this tab's new entry gets added, the
+   * cloud's entries this tab didn't know about get pulled in), then
+   * recompute totalHours/totalXP/dailyLog as a strict sum over that
+   * merged, de-duplicated list rather than trusting independent counters
+   * that can drift or regress. Mutates `state` in place so the rest of
+   * the app (render, group sync) immediately sees the corrected values. */
+  async function reconcileProfileWithCloud(){
+    if(!state.name) return state;
+    try{
+      const cloudKey = 'user-profile:'+state.name.toLowerCase();
+      const r = await window.storage.get(cloudKey, true);
+      if(r && r.value){
+        const cloud = JSON.parse(r.value);
+        const merged = new Map();
+        (cloud.sessionHistory||[]).filter(s=>!s.isLive).forEach(s=>merged.set(s.ts, s));
+        (state.sessionHistory||[]).filter(s=>!s.isLive).forEach(s=>merged.set(s.ts, s));
+        const mergedLog = Array.from(merged.values()).sort((a,b)=>b.ts-a.ts);
+        const liveEntry = (state.sessionHistory||[]).find(s=>s.isLive);
+        state.sessionHistory = liveEntry ? [liveEntry, ...mergedLog] : mergedLog;
+        state.totalHours = mergedLog.reduce((sum,s)=>sum+(s.hours||0), 0);
+        state.totalXP    = Math.round(state.totalHours * XP_PER_HOUR);
+        const dailyLog = {};
+        mergedLog.forEach(s=>{
+          const day = localDateKey(new Date(s.ts));
+          dailyLog[day] = (dailyLog[day]||0) + s.hours;
+        });
+        state.dailyLog = dailyLog;
+        // Carry through cloud-only fields this tab hasn't loaded yet (e.g. a
+        // room joined from another device), never letting local blank fields
+        // clobber real cloud values.
+        if(cloud.rooms && cloud.rooms.length && (!state.rooms || !state.rooms.length)) state.rooms = cloud.rooms;
+        if(cloud.dailyGoalHours!=null && state.dailyGoalHours==null) state.dailyGoalHours = cloud.dailyGoalHours;
+      }
+    }catch(e){ console.warn('STUDYGRID: reconcile failed, writing local state as-is', e); }
+    return state;
+  }
+
   /* saveProfile — local write is instant; cloud write is debounced so that
    * rapid consecutive calls (e.g. start-timer → syncGroupSelf → render all in
    * the same tick) collapse into a single Supabase upsert.  The 4-second
    * window means the write always happens within a few seconds of the action
-   * while eliminating duplicate network round-trips.                        */
+   * while eliminating duplicate network round-trips.
+   *
+   * Every cloud write reconciles with the latest cloud copy FIRST (see
+   * reconcileProfileWithCloud above) so a stale tab can never silently
+   * erase a session or hours that landed from elsewhere in the meantime. */
   let _saveProfileTimer = null;
   async function saveProfile(){
     try{
@@ -1388,7 +1440,10 @@
       _saveProfileTimer = null;
       if(!state.name) return;
       try{
+        await reconcileProfileWithCloud();
         await window.storage.set('user-profile:'+state.name.toLowerCase(), JSON.stringify(state), true);
+        try{ await window.storage.set(STORAGE_KEY, JSON.stringify(state), false); }catch(e){}
+        render();
       }catch(e){ console.error('save cloud failed', e); }
     }, 4000);
   }
@@ -1400,7 +1455,9 @@
     _saveProfileTimer = null;
     if(!state.name) return;
     try{
+      await reconcileProfileWithCloud();
       await window.storage.set('user-profile:'+state.name.toLowerCase(), JSON.stringify(state), true);
+      try{ await window.storage.set(STORAGE_KEY, JSON.stringify(state), false); }catch(e){}
     }catch(e){ console.error('flush save failed', e); }
   }
 
@@ -1409,6 +1466,13 @@
     if(!code) return null;
     const key = 'group:'+code;
     try{
+      // Reconcile local state with the cloud profile FIRST. Without this,
+      // a tab that hasn't recently saved (e.g. one still open from earlier
+      // today) could push its own outdated totalHours/recentLog into the
+      // shared room blob — which is exactly how a friend's finished session
+      // or hour count can appear to "revert" in the room log even though
+      // their profile itself is already correct.
+      await reconcileProfileWithCloud();
       let cur = { name:name||code, members:{}, resources:[], messages:[] };
       try{
         const r = await window.storage.get(key, true);
