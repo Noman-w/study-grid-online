@@ -613,6 +613,62 @@
     }catch(e){ return false; }
   }
 
+  /* ── SESSION LEDGER (append-only, INSERT-only at the database level) ──────
+   * Every previous fix for "a session vanished / got overwritten" (server
+   * time, reconcile-before-write, own-timer realtime, the recover-from-
+   * room-blob hack in onboarding) narrowed the race window for a full-blob
+   * upsert, but could never close it — a blind UPSERT of the whole profile
+   * has no way to know "is my copy still current?" no matter how carefully
+   * the client merges first. Two tabs can both read the same cloud snapshot,
+   * both merge locally, and whichever writes last still wins outright.
+   *
+   * The actual fix is to stop storing finished sessions as an array buried
+   * inside a JSON blob that gets rewritten wholesale on every save, and
+   * instead give every finished session its own permanent row in
+   * `studygrid_sessions`. The anon key this app uses is only granted
+   * INSERT and SELECT on that table (see the RLS policy) — UPDATE and
+   * DELETE are refused by Postgres itself, not just discouraged by app
+   * logic. That means once a session lands here, no tab, no race, and no
+   * future bug in this file can silently alter or erase it — only a
+   * deliberate manual change in Supabase can, exactly as intended.
+   * ────────────────────────────────────────────────────────────────────── */
+  async function fetchSessionLedger(userId){
+    if(!sb || !userId) return null;
+    try{
+      const { data, error } = await sb.from('studygrid_sessions')
+        .select('ts, started_at, hours, note')
+        .eq('user_id', userId)
+        .order('ts', { ascending:false })
+        .limit(3000);
+      if(error){ console.error('fetchSessionLedger', error); return null; }
+      return data || [];
+    }catch(e){ console.error('fetchSessionLedger', e); return null; }
+  }
+  async function insertSessionToLedger(userId, userName, entry){
+    if(!sb || !userId || !entry || !entry.ts || !(entry.hours>0)) return false;
+    try{
+      // ignoreDuplicates → INSERT ... ON CONFLICT (user_id, ts) DO NOTHING.
+      // This needs only INSERT privilege (never UPDATE), so it's safe to
+      // call repeatedly for the same session without ever risking a
+      // pre-existing row being modified.
+      const { error } = await sb.from('studygrid_sessions').upsert({
+        user_id   : userId,
+        user_name : userName || '',
+        ts        : entry.ts,
+        started_at: entry.started_at || null,
+        hours     : entry.hours,
+        note      : entry.note || '',
+      }, { onConflict: 'user_id,ts', ignoreDuplicates: true });
+      if(error){ console.error('insertSessionToLedger', error); return false; }
+      return true;
+    }catch(e){ console.error('insertSessionToLedger', e); return false; }
+  }
+  // NOTE: syncSessionHistoryFromLedger() itself lives further down, inside
+  // the main app closure — it needs `state`, `XP_PER_HOUR`, and
+  // `localDateKey`, which are only defined in that scope. fetchSessionLedger
+  // and insertSessionToLedger above only need `sb`, which is shared
+  // top-level script scope, so they're fine to call from either place.
+
   /**
    * Fetch the current UTC time from Supabase's postgres server.
    * This is the single source of truth for all timer timestamps —
@@ -980,8 +1036,52 @@
     return false;
   }
 
+  /* ── REFRESH (anti-clobber for the timer itself) ───────────────────────
+   * THE BUG THIS FIXES: pause/resume/stop all computed elapsed time as
+   * "server-now minus THIS TAB'S in-memory started_at/accumulated_seconds."
+   * That's only correct if this tab's copy of timerRecord is still
+   * current. A tab that's been backgrounded for a while (Realtime
+   * websocket silently drops on mobile far more often than people expect)
+   * can be holding an OLD started_at from long before a pause/resume that
+   * already happened elsewhere. When that stale tab then computes a
+   * segment against "now," it measures the whole gap as if it were one
+   * continuous active stretch — which is exactly how a paused session
+   * banked at ~8h35m can jump to ~12h with no real studying in between.
+   *
+   * THE FIX: pull the actual persisted timer record from the server and
+   * adopt it as the baseline immediately before any segment math runs, so
+   * the calculation is always anchored to the truth, not to whatever this
+   * tab last happened to see. */
+  async function refreshTimerFromServer(){
+    if(!state.id || !sb) return timerRecord;
+    try{
+      const r = await window.storage.get(timerCloudKey(), true);
+      if(r && r.value){
+        const saved = JSON.parse(r.value);
+        if(saved && saved.status){
+          timerRecord = {
+            status             : saved.status,
+            started_at         : saved.started_at||null,
+            accumulated_seconds: saved.accumulated_seconds||0,
+            topic              : saved.topic || timerRecord.topic || '',
+          };
+        }
+      }
+    }catch(e){ console.warn('STUDYGRID: timer refresh failed, using local record', e); }
+    return timerRecord;
+  }
+
   /* ── START ──────────────────────────────────────────────────────────────── */
   async function startTimer(){
+    // Re-check the server first: if another tab/device already has an
+    // active or paused session running, don't silently stomp on it by
+    // starting a fresh one on top.
+    await refreshTimerFromServer();
+    if(timerRecord.status === 'active' || timerRecord.status === 'paused'){
+      applyTimerUI();
+      showToast('Already running', 'A session is already '+timerRecord.status+' on another tab or device — resume or stop that one instead.');
+      return;
+    }
     const topicEl = document.getElementById('preSessionTopic');
     const topic   = topicEl.value.trim() || 'General Focus';
     topicEl.disabled = true;
@@ -1028,7 +1128,12 @@
 
   /* ── PAUSE ──────────────────────────────────────────────────────────────── */
   async function pauseTimer(){
-    if(timerRecord.status!=='active') return;
+    // Adopt the server's current record first — see refreshTimerFromServer().
+    // Without this, a stale/backgrounded tab computes the pause segment
+    // against its own outdated started_at and can bank hours that were
+    // never actually studied.
+    await refreshTimerFromServer();
+    if(timerRecord.status!=='active'){ applyTimerUI(); return; }
     // SERVER TIME: compute accumulated seconds using server clock so
     // mobile browser suspension doesn't truncate the paused duration.
     const serverNow   = await window.getServerNow();
@@ -1072,7 +1177,10 @@
 
   /* ── RESUME ─────────────────────────────────────────────────────────────── */
   async function resumeTimer(){
-    if(timerRecord.status!=='paused') return;
+    // Same reasoning as pauseTimer() — adopt the server's record before
+    // touching anything, so this tab can't resume from a stale baseline.
+    await refreshTimerFromServer();
+    if(timerRecord.status!=='paused'){ applyTimerUI(); return; }
     // SERVER TIME: same reason as startTimer — use server clock on every resume
     // so pause→resume gaps are measured against the same clock as started_at.
     const serverNow = await window.getServerNow();
@@ -1104,6 +1212,15 @@
     //   elapsed = (serverStopAt - started_at) + accumulated_seconds
     // Both started_at and serverStopAt come from the same server clock, so device
     // clock skew and browser suspension are completely irrelevant.
+    // Adopt the server's record before snapshotting — same reasoning as
+    // pauseTimer()/resumeTimer(). Otherwise a stale tab can compute (and
+    // save!) a session length measured against the wrong started_at.
+    await refreshTimerFromServer();
+    if(timerRecord.status === 'idle'){
+      // Already stopped elsewhere (or nothing to stop) — nothing to log.
+      applyTimerUI();
+      return;
+    }
     const snapshotRecord = { ...timerRecord }; // capture before we clear it
     stopTick();
 
@@ -1357,6 +1474,11 @@
           // instead of surviving from the stale local cache.
           state = Object.assign({}, state, cloud);
 
+          // Finished-session totals/history come from the append-only
+          // ledger, not from whatever totalHours/sessionHistory happened
+          // to be sitting in this profile blob.
+          await syncSessionHistoryFromLedger();
+
           // STEP 4 — local cache now mirrors the cloud exactly.
           try{ await window.storage.set(STORAGE_KEY, JSON.stringify(state), false); }catch(e){}
           return true;
@@ -1373,42 +1495,69 @@
   }
 
   /* ── RECONCILE (anti-clobber) ──────────────────────────────────────────
-   * THE BUG THIS FIXES: every cloud write used to be "take whatever is in
-   * this tab's memory and overwrite the whole profile row with it." If a
-   * second tab/device (phone left open, background tab, etc.) held an
-   * OLDER copy of `state` and wrote AFTER a fresher save from elsewhere,
-   * its stale sessionHistory/totalHours silently replaced the newer data —
-   * a finished session (and the hours that came with it) could vanish.
+   * OLD BUG: every cloud write used to be "take whatever is in this tab's
+   * memory and overwrite the whole profile row with it." A stale tab could
+   * silently erase a finished session written elsewhere moments earlier.
    *
-   * THE FIX: never blind-overwrite. Right before any write, pull the
-   * current cloud copy, MERGE sessionHistory as a union keyed by `ts`
-   * (nothing is ever dropped — this tab's new entry gets added, the
-   * cloud's entries this tab didn't know about get pulled in), then
-   * recompute totalHours/totalXP/dailyLog as a strict sum over that
-   * merged, de-duplicated list rather than trusting independent counters
-   * that can drift or regress. Mutates `state` in place so the rest of
-   * the app (render, group sync) immediately sees the corrected values. */
+   * OLD FIX (kept only as history): merge sessionHistory from both copies
+   * by `ts` before writing. This narrowed the race window but a full-blob
+   * upsert can never fully close it — see syncSessionHistoryFromLedger()
+   * below for the actual fix, which moved sessions out of the blob
+   * entirely and into an insert-only database table. */
+  /** Rebuild state.sessionHistory/totalHours/totalXP/dailyLog from the
+   * ledger — the ledger is a strict superset of anything any single tab
+   * could know, so this replaces the old "merge two JSON blobs" logic
+   * entirely. Also opportunistically pushes any local finished session the
+   * ledger doesn't have yet (first-run migration of pre-ledger history, or
+   * a retry of an insert that failed earlier), so it's always safe to call
+   * on every reconcile — it self-heals rather than needing a one-time flag. */
+  async function syncSessionHistoryFromLedger(){
+    if(!state.id || !sb) return;
+    const rows = await fetchSessionLedger(state.id);
+    if(rows === null) return; // offline/error — leave existing state untouched
+    const known = new Set(rows.map(r=>r.ts));
+    const pending = (state.sessionHistory||[]).filter(s=>!s.isLive && s.ts && s.hours>0 && !known.has(s.ts));
+    for(const s of pending){
+      await insertSessionToLedger(state.id, state.name, s); // retried again next reconcile if this fails
+      // Include it in the merged view either way — a session the user has
+      // already logged locally must never disappear from what they see,
+      // even on the rare tick where the permanent write hasn't landed yet.
+      rows.push({ ts:s.ts, started_at:s.started_at||null, hours:s.hours, note:s.note||'' });
+    }
+    const ledgerLog = rows
+      .map(r=>({ ts:r.ts, hours:r.hours, note:r.note||'', started_at:r.started_at||null }))
+      .sort((a,b)=>b.ts-a.ts);
+    const liveEntry = (state.sessionHistory||[]).find(s=>s.isLive);
+    state.sessionHistory = liveEntry ? [liveEntry, ...ledgerLog] : ledgerLog;
+    state.totalHours = ledgerLog.reduce((sum,s)=>sum+(s.hours||0), 0);
+    state.totalXP    = Math.round(state.totalHours * XP_PER_HOUR);
+    const dailyLog = {};
+    ledgerLog.forEach(s=>{
+      const day = localDateKey(new Date(s.ts));
+      dailyLog[day] = (dailyLog[day]||0) + s.hours;
+    });
+    state.dailyLog = dailyLog;
+  }
+
   async function reconcileProfileWithCloud(){
     if(!state.name) return state;
     try{
+      // Finished sessions are no longer reconciled by merging two JSON
+      // blobs by hand — they live in the append-only studygrid_sessions
+      // ledger, which the database itself refuses to let any client
+      // update or delete (see that table's RLS policy). Reading it fresh
+      // here is a strict superset of whatever any single tab knows, by
+      // construction, so there is no merge left to get wrong.
+      await syncSessionHistoryFromLedger();
+
+      // Non-historical fields (rooms, goal) still live in the mutable
+      // profile blob — that's fine, since losing a race here just means a
+      // setting briefly shows stale, never that a finished session
+      // disappears.
       const cloudKey = 'user-profile:'+state.name.toLowerCase();
       const r = await window.storage.get(cloudKey, true);
       if(r && r.value){
         const cloud = JSON.parse(r.value);
-        const merged = new Map();
-        (cloud.sessionHistory||[]).filter(s=>!s.isLive).forEach(s=>merged.set(s.ts, s));
-        (state.sessionHistory||[]).filter(s=>!s.isLive).forEach(s=>merged.set(s.ts, s));
-        const mergedLog = Array.from(merged.values()).sort((a,b)=>b.ts-a.ts);
-        const liveEntry = (state.sessionHistory||[]).find(s=>s.isLive);
-        state.sessionHistory = liveEntry ? [liveEntry, ...mergedLog] : mergedLog;
-        state.totalHours = mergedLog.reduce((sum,s)=>sum+(s.hours||0), 0);
-        state.totalXP    = Math.round(state.totalHours * XP_PER_HOUR);
-        const dailyLog = {};
-        mergedLog.forEach(s=>{
-          const day = localDateKey(new Date(s.ts));
-          dailyLog[day] = (dailyLog[day]||0) + s.hours;
-        });
-        state.dailyLog = dailyLog;
         // Carry through cloud-only fields this tab hasn't loaded yet (e.g. a
         // room joined from another device), never letting local blank fields
         // clobber real cloud values.
@@ -2165,15 +2314,32 @@
       // Finalize sessionHistory — convert the isLive placeholder into the real entry.
       // Preserve started_at from the placeholder so the log can show start→end times.
       const liveIdx = state.sessionHistory.findIndex(s=>s.isLive);
+      let finalizedEntry = null;
       if(liveIdx!==-1){
         const topic      = state.sessionHistory[liveIdx].note;
         const startedAt  = state.sessionHistory[liveIdx].started_at || null;
-        state.sessionHistory[liveIdx] = {
+        finalizedEntry = {
           ts        : Date.now(),
           hours     : hrs,
           note      : topic+(extraNote?' — '+extraNote:''),
           started_at: startedAt,
         };
+        state.sessionHistory[liveIdx] = finalizedEntry;
+      }
+
+      // PERMANENT RECORD — write this finished session to the append-only
+      // ledger before anything else touches it. This is an INSERT into a
+      // table this app's database key can only insert/select on; the
+      // database itself rejects UPDATE/DELETE against it. Once this call
+      // lands, no tab, no race, and no bug elsewhere in this file can
+      // silently erase or replace this session — only a deliberate manual
+      // change in Supabase can, which is exactly what was asked for.
+      if(finalizedEntry){
+        let ledgerOk = await insertSessionToLedger(state.id, state.name, finalizedEntry);
+        if(!ledgerOk) ledgerOk = await insertSessionToLedger(state.id, state.name, finalizedEntry); // one retry
+        if(!ledgerOk){
+          showToast('Session saved locally only', 'Could not confirm this session with the server yet — it will keep retrying in the background. Avoid clearing browser data until it syncs.');
+        }
       }
 
       timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
@@ -2319,38 +2485,12 @@
         state = Object.assign(state, saved);
         migrateRoomsIfNeeded();
 
-        // ── Recover sessions that landed in group blobs but not in profile ──
-        const rooms = state.rooms||[];
-        for(const room of rooms){
-          try{
-            const groupRaw = await window.storage.get('group:'+room.code, true);
-            if(groupRaw && groupRaw.value){
-              const group  = JSON.parse(groupRaw.value);
-              const member = group.members && group.members[state.id];
-              if(member && Array.isArray(member.recentLog)){
-                const knownTs = new Set((state.sessionHistory||[]).map(s=>s.ts));
-                const missing = member.recentLog.filter(s => s.ts && s.hours > 0 && !knownTs.has(s.ts));
-                if(missing.length > 0){
-                  const profileTotal = state.totalHours || 0;
-                  const knownTotal = (state.sessionHistory||[]).filter(s=>!s.isLive).reduce((sum,s)=>sum+(s.hours||0), 0);
-                  missing.forEach(s => {
-                    state.sessionHistory = state.sessionHistory || [];
-                    state.sessionHistory.unshift({ ts:s.ts, hours:s.hours, note:s.note||'' });
-                    const alreadyCounted = profileTotal >= knownTotal + s.hours;
-                    if(!alreadyCounted){
-                      state.totalHours += s.hours;
-                      state.totalXP    += Math.round(s.hours * XP_PER_HOUR);
-                      const dayKey = localDateKey(new Date(s.ts));
-                      state.dailyLog = state.dailyLog || {};
-                      state.dailyLog[dayKey] = (state.dailyLog[dayKey]||0) + s.hours;
-                    }
-                  });
-                  showToast('Session recovered ✓', 'Room '+room.code+' log synced');
-                }
-              }
-            }
-          }catch(e){ console.warn('reconcile failed for room '+room.code, e); }
-        }
+        // Totals/history come straight from the append-only ledger — this
+        // replaces the old heuristic that tried to guess which sessions
+        // from a room's recentLog cache were "missing" and whether they'd
+        // already been counted. That guesswork is gone because the ledger
+        // is simply the complete, authoritative list; nothing to infer.
+        await syncSessionHistoryFromLedger();
 
         showToast('Cloud profile loaded','Welcome back, '+state.name+'!');
       } else {
