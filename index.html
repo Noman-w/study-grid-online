@@ -663,6 +663,27 @@
       return true;
     }catch(e){ console.error('insertSessionToLedger', e); return false; }
   }
+  /** Audit trail for "Discard session" clicks — a permanent record of what
+   * got thrown away and when, kept in its OWN insert-only table (not the
+   * hours ledger) so a discarded session can never accidentally get summed
+   * into anyone's totals. Purely diagnostic: nothing in the UI reads this;
+   * it exists so a discard can be told apart from data actually being lost
+   * to a bug, by checking studygrid_discards directly in Supabase. */
+  async function insertDiscardedSession(userId, userName, entry){
+    if(!sb || !userId || !entry || !entry.ts) return false;
+    try{
+      const { error } = await sb.from('studygrid_discards').upsert({
+        user_id     : userId,
+        user_name   : userName || '',
+        ts          : entry.ts,
+        started_at  : entry.started_at || null,
+        hours       : entry.hours || 0,
+        note        : entry.note || '',
+      }, { onConflict: 'user_id,ts', ignoreDuplicates: true });
+      if(error){ console.error('insertDiscardedSession', error); return false; }
+      return true;
+    }catch(e){ console.error('insertDiscardedSession', e); return false; }
+  }
   // NOTE: syncSessionHistoryFromLedger() itself lives further down, inside
   // the main app closure — it needs `state`, `XP_PER_HOUR`, and
   // `localDateKey`, which are only defined in that scope. fetchSessionLedger
@@ -2294,6 +2315,18 @@
 
     /* log modal */
     document.getElementById('logCancel').onclick = async ()=>{
+      // Record what's being thrown away before it's gone — purely a
+      // diagnostic trail (see insertDiscardedSession), never shown in the
+      // UI and never counted in any totals.
+      if(pendingTimerHours && pendingTimerHours > 0){
+        const liveEntry = state.sessionHistory.find(s=>s.isLive);
+        insertDiscardedSession(state.id, state.name, {
+          ts        : Date.now(),
+          hours     : Math.round(pendingTimerHours/1000)/3600,
+          note      : (liveEntry && liveEntry.note) || '',
+          started_at: (liveEntry && liveEntry.started_at) || null,
+        }); // fire-and-forget — a failed audit write shouldn't block discarding
+      }
       pendingTimerHours = null;
       timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
       await persistTimer();
