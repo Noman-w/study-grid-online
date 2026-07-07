@@ -866,6 +866,10 @@
   let cachedRoomData    = {};   // {code: groupData}
   let pendingTimerHours  = null;
   let pendingResourceCode = null;
+  // Last object handed to persistPendingLog() — kept so persistPendingLogOrWarn()
+  // can retry the exact same payload. See the "PENDING LOG" block below for why
+  // this exists: it's the durable copy of a finished-but-unconfirmed session.
+  let pendingLogDraft = null;
 
   /* per-room chat state — keyed by room code */
   let roomChatState = {};
@@ -1001,6 +1005,84 @@
     return !!ok;
   }
   async function flushPersistTimer(){ return await persistTimer(); }
+
+  /* ── PENDING LOG (durability fix for the Stop→confirm gap) ─────────────────
+   * THE BUG THIS FIXES: stopTimerAndLog() flips the cloud timer record to
+   * 'idle' immediately, then shows a "Save session" confirmation modal, and
+   * ONLY writes the finished session into the ledger / totals once the user
+   * explicitly taps "Save session". Between those two moments, the completed
+   * session used to exist ONLY as a JS variable (pendingTimerHours) in one
+   * browser tab. If that tab closed — phone locked and the browser killed
+   * the background tab, the network dropped, the page crashed, the laptop
+   * lid closed — before the user tapped Save, the session vanished
+   * completely: not logged, not in the discard audit table, not
+   * recoverable on reload. No trace anywhere.
+   *
+   * THE FIX: the instant Stop computes a valid elapsed duration — BEFORE
+   * the modal is even shown — write it to its own durable row in Supabase.
+   * On the next boot (same tab, same device later, or even a different
+   * device on the same account), if this row still exists it means neither
+   * Save nor Discard ever ran, so we recover it and re-open the exact same
+   * confirmation modal instead of silently losing the hours. The row is
+   * only ever deleted by the Save and Discard handlers themselves. */
+  function pendingLogCloudKey(){ return 'pendinglog:'+state.id; }
+
+  async function persistPendingLog(entry){
+    if(!state.id || !sb) return false;
+    try{
+      const ok = await window.storage.set(pendingLogCloudKey(), JSON.stringify(entry), true);
+      return !!ok;
+    }catch(e){ console.error('persistPendingLog', e); return false; }
+  }
+  /** persistPendingLog() with one retry + user warning, mirroring
+   * persistTimerOrWarn() below — the finished-session record deserves the
+   * exact same durability guarantee the timer state already gets. */
+  async function persistPendingLogOrWarn(){
+    let ok = await persistPendingLog(pendingLogDraft);
+    if(!ok) ok = await persistPendingLog(pendingLogDraft); // one retry
+    if(!ok){
+      showToast('Not saved to server', 'This finished session could not be confirmed with the server yet. Please keep this tab open until you tap "Save session" — closing it now risks losing the whole session.');
+    }
+    return ok;
+  }
+  async function clearPendingLog(){
+    if(!state.id || !sb) return;
+    try{ await window.storage.delete(pendingLogCloudKey(), true); }catch(e){ /* best effort — a leftover row just means a re-offered recovery later, never data loss */ }
+  }
+  async function loadPendingLog(){
+    if(!state.id || !sb) return null;
+    try{
+      const r = await window.storage.get(pendingLogCloudKey(), true);
+      if(r && r.value) return JSON.parse(r.value);
+    }catch(e){ /* nothing pending, or unreadable — treat as none */ }
+    return null;
+  }
+
+  /** Called from both boot paths (returning user with a local cache, and a
+   * fresh login on a new device/browser) right after we've established
+   * there's no active/paused timer to restore. If a pending-log row still
+   * exists, neither Save nor Discard ever ran for that stopped session — so
+   * recover it and re-open the same confirmation modal instead of letting it
+   * quietly vanish. This is the recovery half of the fix described in the
+   * "PENDING LOG" comment block above persistPendingLog(). */
+  async function recoverPendingLogIfAny(){
+    const pending = await loadPendingLog();
+    if(!pending || !(pending.elapsedMs > 0)) return;
+    pendingTimerHours = pending.elapsedMs;
+    if(!state.sessionHistory.find(s=>s.isLive)){
+      state.sessionHistory.unshift({
+        ts        : pending.ts || Date.now(),
+        hours     : 0,
+        note      : pending.topic || 'General Focus',
+        isLive    : true,
+        started_at: pending.started_at || null,
+      });
+    }
+    document.getElementById('logTimeBadge').textContent = fmtClock(pending.elapsedMs);
+    document.getElementById('logNoteInput').value = '';
+    openModal('logModal');
+    showToast('Unsaved session recovered', 'A session was stopped earlier but never confirmed — please save or discard it now so it isn\'t lost.');
+  }
 
   /** persistTimer() with one retry. Start/pause/resume/stop all anchor the
    * timer's truth in the DB — if the write never lands, the local UI would
@@ -1308,6 +1390,21 @@
     pendingTimerHours = elapsedMs; // stored as ms, converted to hours on save
     document.getElementById('logTimeBadge').textContent = fmtClock(elapsedMs);
     document.getElementById('logNoteInput').value = '';
+
+    // DURABILITY FIX: record this finished-but-unconfirmed session in Supabase
+    // BEFORE the modal is shown — see persistPendingLog() above. This is what
+    // makes the session recoverable if the tab dies before Save/Discard is
+    // clicked, instead of the hours living only in the pendingTimerHours
+    // variable in this one tab.
+    const liveEntryForPending = state.sessionHistory.find(s=>s.isLive);
+    pendingLogDraft = {
+      ts        : Date.now(),
+      elapsedMs : elapsedMs,
+      topic     : (liveEntryForPending && liveEntryForPending.note) || snapshotRecord.topic || 'General Focus',
+      started_at: (liveEntryForPending && liveEntryForPending.started_at) || snapshotRecord.started_at || null,
+    };
+    await persistPendingLogOrWarn();
+
     openModal('logModal');
     if(state.rooms&&state.rooms.length) await syncGroupSelf();
   }
@@ -2328,6 +2425,8 @@
         }); // fire-and-forget — a failed audit write shouldn't block discarding
       }
       pendingTimerHours = null;
+      pendingLogDraft = null;
+      await clearPendingLog(); // the discard record above is the permanent trace now — safe to drop the recovery row
       timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
       await persistTimer();
       state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
@@ -2378,6 +2477,11 @@
       timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
       await flushPersistTimer();
       await addStudyHoursRecord(hrs);
+
+      // The session is now durably recorded (ledger insert + totals) — safe
+      // to drop the recovery row so it's never offered for recovery again.
+      pendingLogDraft = null;
+      await clearPendingLog();
     };
 
     /* settings */
@@ -2538,7 +2642,7 @@
       closeModal('onboardModal');
       await window.getServerNow(); // prime clock offset before any elapsed-time math runs
       const hadTimer = await loadPersistedTimer();
-      if(hadTimer){ restoreTimerUI(); } else { applyTimerUI(); }
+      if(hadTimer){ restoreTimerUI(); } else { applyTimerUI(); await recoverPendingLogIfAny(); }
       if(window.subscribeOwnTimer) window.subscribeOwnTimer(state.id, handleRemoteTimerUpdate);
       if(state.rooms&&state.rooms.length){ try{ await syncGroupSelf(); }catch(e){} }
       render();
@@ -2566,7 +2670,7 @@
       migrateRoomsIfNeeded();
       await window.getServerNow(); // prime clock offset before any elapsed-time math runs
       const hadTimer = await loadPersistedTimer();
-      if(hadTimer){ restoreTimerUI(); } else { applyTimerUI(); }
+      if(hadTimer){ restoreTimerUI(); } else { applyTimerUI(); await recoverPendingLogIfAny(); }
       if(window.subscribeOwnTimer) window.subscribeOwnTimer(state.id, handleRemoteTimerUpdate);
       if(state.rooms&&state.rooms.length){ try{ await syncGroupSelf(); }catch(e){} }
     }
