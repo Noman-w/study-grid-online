@@ -1069,6 +1069,7 @@
     const pending = await loadPendingLog();
     if(!pending || !(pending.elapsedMs > 0)) return;
     pendingTimerHours = pending.elapsedMs;
+    pendingLogDraft   = pending;
     if(!state.sessionHistory.find(s=>s.isLive)){
       state.sessionHistory.unshift({
         ts        : pending.ts || Date.now(),
@@ -2445,6 +2446,10 @@
 
       // Finalize sessionHistory — convert the isLive placeholder into the real entry.
       // Preserve started_at from the placeholder so the log can show start→end times.
+      // FALLBACK: on a recovered session (see recoverPendingLogIfAny), there may be
+      // no isLive placeholder in memory at all — use the durable pendingLogDraft
+      // (topic/started_at from the row we wrote in Supabase at Stop-time) instead,
+      // so a recovered session still finalizes correctly.
       const liveIdx = state.sessionHistory.findIndex(s=>s.isLive);
       let finalizedEntry = null;
       if(liveIdx!==-1){
@@ -2457,6 +2462,14 @@
           started_at: startedAt,
         };
         state.sessionHistory[liveIdx] = finalizedEntry;
+      } else if(pendingLogDraft){
+        finalizedEntry = {
+          ts        : Date.now(),
+          hours     : hrs,
+          note      : (pendingLogDraft.topic||'General Focus')+(extraNote?' — '+extraNote:''),
+          started_at: pendingLogDraft.started_at || null,
+        };
+        state.sessionHistory.unshift(finalizedEntry);
       }
 
       // PERMANENT RECORD — write this finished session to the append-only
@@ -2466,11 +2479,23 @@
       // lands, no tab, no race, and no bug elsewhere in this file can
       // silently erase or replace this session — only a deliberate manual
       // change in Supabase can, which is exactly what was asked for.
+      //
+      // BUT: if BOTH attempts fail (e.g. a brief network drop right at Save
+      // time), this session is NOT yet durably recorded anywhere permanent.
+      // The optimistic totalHours bump below will still make the UI show
+      // "saved" in THIS tab — but loadProfile() unconditionally overwrites
+      // local state with the cloud copy on the next load (by design, so a
+      // manual Supabase fix always wins). If that stale cloud copy hasn't
+      // seen this session either (same network drop), the optimistic bump
+      // gets silently erased on next load with no error shown — this is
+      // exactly how a session that showed "Session logged!" can still
+      // vanish for good. ledgerOk tracks whether that actually happened.
+      let ledgerOk = true;
       if(finalizedEntry){
-        let ledgerOk = await insertSessionToLedger(state.id, state.name, finalizedEntry);
+        ledgerOk = await insertSessionToLedger(state.id, state.name, finalizedEntry);
         if(!ledgerOk) ledgerOk = await insertSessionToLedger(state.id, state.name, finalizedEntry); // one retry
         if(!ledgerOk){
-          showToast('Session saved locally only', 'Could not confirm this session with the server yet — it will keep retrying in the background. Avoid clearing browser data until it syncs.');
+          showToast('Session not yet confirmed', 'Could not reach the server to save this session. It is queued — reopen or reload the app once you\'re back online and you\'ll be asked to save it again. Don\'t clear browser data until then.');
         }
       }
 
@@ -2478,10 +2503,15 @@
       await flushPersistTimer();
       await addStudyHoursRecord(hrs);
 
-      // The session is now durably recorded (ledger insert + totals) — safe
-      // to drop the recovery row so it's never offered for recovery again.
-      pendingLogDraft = null;
-      await clearPendingLog();
+      // Only drop the recovery row once the session is ACTUALLY durably
+      // recorded in the permanent ledger. If the insert failed, deliberately
+      // leave the row in place — recoverPendingLogIfAny() will offer this
+      // exact session back on the next load (any tab, any device) instead of
+      // letting a failed save disappear without a trace.
+      if(ledgerOk){
+        pendingLogDraft = null;
+        await clearPendingLog();
+      }
     };
 
     /* settings */
