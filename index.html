@@ -1068,6 +1068,27 @@
   async function recoverPendingLogIfAny(){
     const pending = await loadPendingLog();
     if(!pending || !(pending.elapsedMs > 0)) return;
+
+    // GUARD AGAINST DOUBLE-LOGGING: this pending row is only a leftover
+    // "was this ever confirmed?" marker — it's possible the session already
+    // made it into the permanent ledger (e.g. an earlier reconcile's retry
+    // succeeded after the row was written, or another device already logged
+    // it) even though this specific row was never cleared. If we blindly
+    // re-open the Save modal and the user taps Save again, that would insert
+    // a SECOND ledger row for the same session (different ts = not caught by
+    // the ON CONFLICT dedupe) and silently double-count the hours. started_at
+    // is set once at the original Start and never changes across pause/
+    // resume, so it's a reliable match key — two real sessions from the same
+    // user starting in the same server millisecond isn't realistic.
+    if(pending.started_at){
+      const rows = await fetchSessionLedger(state.id);
+      if(rows && rows.some(r => r.started_at === pending.started_at)){
+        pendingLogDraft = null;
+        await clearPendingLog();
+        return;
+      }
+    }
+
     pendingTimerHours = pending.elapsedMs;
     pendingLogDraft   = pending;
     if(!state.sessionHistory.find(s=>s.isLive)){
