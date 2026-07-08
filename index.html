@@ -224,6 +224,9 @@
   .timer-btn-pause:hover{background:rgba(242,169,59,.1);}
   .timer-btn-stop{font-size:14px;font-weight:700;padding:13px 32px;border-radius:999px;background:transparent;color:var(--danger);border:1.5px solid var(--danger);cursor:pointer;letter-spacing:.5px;transition:.2s;font-family:'Space Grotesk',sans-serif;}
   .timer-btn-stop:hover{background:rgba(255,107,107,.1);}
+  .timer-btn-saving{font-size:14px;font-weight:700;padding:13px 32px;border-radius:999px;background:transparent;color:var(--muted);border:1.5px solid var(--line);cursor:default;letter-spacing:.5px;font-family:'Space Grotesk',sans-serif;display:inline-flex;align-items:center;gap:8px;}
+  .timer-btn-saving .spin{width:13px;height:13px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--teal);animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
 
   /* topic input */
   #preSessionTopicField{width:100%;max-width:320px;}
@@ -385,6 +388,7 @@
         <button class="timer-btn-stop"  id="timerStop"   style="display:none;">⏹ Stop &amp; Save</button>
         <button class="timer-btn-start" id="timerResume"        style="display:none;">▶ Resume</button>
         <button class="timer-btn-stop"  id="timerStopFromPause" style="display:none;">⏹ Stop &amp; Save</button>
+        <button class="timer-btn-saving" id="timerSaving" style="display:none;" disabled><span class="spin"></span><span id="timerSavingLabel">Saving…</span></button>
       </div>
     </div>
   </div>
@@ -580,10 +584,42 @@
     console.warn('STUDYGRID: Supabase not configured.');
   }
 
+  /* ── NO REQUEST HANGS FOREVER ────────────────────────────────────────────
+   * THE BUG THIS FIXES: a long session (hours, laptop asleep / phone locked
+   * for most of it) that fails to save, immediately followed by a fresh
+   * session saving fine. Every Supabase call in this file is a bare
+   * `await sb.from(...)`/`await sb.rpc(...)` with no timeout. Right after a
+   * device wakes from sleep, the OS reports "online" before the network
+   * stack is actually usable — the browser can hold onto dead TCP sockets
+   * from before sleep and hand them to the very first request afterward.
+   * That request doesn't fail fast; it can hang for a long time (well past
+   * this app's own retry windows) before the browser finally gives up. Every
+   * retry loop in this file was built assuming a request either succeeds or
+   * fails quickly — with no timeout, one hung request just eats the whole
+   * retry budget doing nothing, and the session sits "still saving..."
+   * indefinitely. A freshly loaded tab has no stale sockets, which is
+   * exactly why starting a brand-new session right after "just worked."
+   *
+   * THE FIX: wrap every Supabase call in a hard timeout. A timed-out call
+   * rejects like any other failure, so the existing retry loops (in
+   * finalizeAndSaveSession, scheduleLedgerRetry, persistPendingLogOrWarn,
+   * persistTimerOrWarn) immediately try again on a FRESH request instead of
+   * waiting on the same broken one. */
+  function withTimeout(promise, ms, label){
+    return new Promise((resolve, reject)=>{
+      const timer = setTimeout(()=>reject(new Error((label||'Request')+' timed out after '+ms+'ms')), ms);
+      Promise.resolve(promise).then(
+        v=>{ clearTimeout(timer); resolve(v); },
+        e=>{ clearTimeout(timer); reject(e); }
+      );
+    });
+  }
+  const SB_TIMEOUT_MS = 10000; // 10s — generous for a slow connection, still far short of a hung one
+
   async function sbGet(key){
     if(!sb) return null;
     try{
-      const { data, error } = await sb.from('studygrid_kv').select('value').eq('key', key).maybeSingle();
+      const { data, error } = await withTimeout(sb.from('studygrid_kv').select('value').eq('key', key).maybeSingle(), SB_TIMEOUT_MS, 'sbGet');
       if(error || !data) return null;
       return { value: JSON.stringify(data.value) };
     }catch(e){ console.error('sbGet', e); return null; }
@@ -591,14 +627,14 @@
   async function sbSet(key, valueString){
     if(!sb) return false;
     try{
-      const { error } = await sb.from('studygrid_kv').upsert({ key, value: JSON.parse(valueString), updated_at: new Date().toISOString() });
+      const { error } = await withTimeout(sb.from('studygrid_kv').upsert({ key, value: JSON.parse(valueString), updated_at: new Date().toISOString() }), SB_TIMEOUT_MS, 'sbSet');
       return !error;
     }catch(e){ console.error('sbSet', e); return false; }
   }
   async function sbDelete(key){
     if(!sb) return false;
     try{
-      const { error } = await sb.from('studygrid_kv').delete().eq('key', key);
+      const { error } = await withTimeout(sb.from('studygrid_kv').delete().eq('key', key), SB_TIMEOUT_MS, 'sbDelete');
       return !error;
     }catch(e){ return false; }
   }
@@ -625,11 +661,11 @@
   async function fetchSessionLedger(userId){
     if(!sb || !userId) return null;
     try{
-      const { data, error } = await sb.from('studygrid_sessions')
+      const { data, error } = await withTimeout(sb.from('studygrid_sessions')
         .select('ts, started_at, hours, note')
         .eq('user_id', userId)
         .order('ts', { ascending:false })
-        .limit(3000);
+        .limit(3000), SB_TIMEOUT_MS, 'fetchSessionLedger');
       if(error){ console.error('fetchSessionLedger', error); return null; }
       return data || [];
     }catch(e){ console.error('fetchSessionLedger', e); return null; }
@@ -641,14 +677,14 @@
       // This needs only INSERT privilege (never UPDATE), so it's safe to
       // call repeatedly for the same session without ever risking a
       // pre-existing row being modified.
-      const { error } = await sb.from('studygrid_sessions').upsert({
+      const { error } = await withTimeout(sb.from('studygrid_sessions').upsert({
         user_id   : userId,
         user_name : userName || '',
         ts        : entry.ts,
         started_at: entry.started_at || null,
         hours     : entry.hours,
         note      : entry.note || '',
-      }, { onConflict: 'user_id,ts', ignoreDuplicates: true });
+      }, { onConflict: 'user_id,ts', ignoreDuplicates: true }), SB_TIMEOUT_MS, 'insertSessionToLedger');
       if(error){
         // Log the REAL Postgres error (code/message/details/hint), not just
         // a generic failure — this is what actually tells apart "genuine
@@ -670,14 +706,14 @@
   async function insertDiscardedSession(userId, userName, entry){
     if(!sb || !userId || !entry || !entry.ts) return false;
     try{
-      const { error } = await sb.from('studygrid_discards').upsert({
+      const { error } = await withTimeout(sb.from('studygrid_discards').upsert({
         user_id     : userId,
         user_name   : userName || '',
         ts          : entry.ts,
         started_at  : entry.started_at || null,
         hours       : entry.hours || 0,
         note        : entry.note || '',
-      }, { onConflict: 'user_id,ts', ignoreDuplicates: true });
+      }, { onConflict: 'user_id,ts', ignoreDuplicates: true }), SB_TIMEOUT_MS, 'insertDiscardedSession');
       if(error){ console.error('insertDiscardedSession', error); return false; }
       return true;
     }catch(e){ console.error('insertDiscardedSession', e); return false; }
@@ -716,7 +752,7 @@
     if(!sb){ window.lastServerSyncOK = false; return new Date().toISOString(); }
     try{
       const localBefore = Date.now();
-      const { data, error } = await sb.rpc('get_server_time');
+      const { data, error } = await withTimeout(sb.rpc('get_server_time'), SB_TIMEOUT_MS, 'get_server_time');
       const localAfter  = Date.now();
       if(!error && data){
         const serverMs = new Date(data).getTime();
@@ -728,7 +764,7 @@
       }
       console.warn('STUDYGRID: get_server_time RPC failed, falling back to local clock', error);
     }catch(e){
-      console.warn('STUDYGRID: get_server_time RPC threw, falling back to local clock', e);
+      console.warn('STUDYGRID: get_server_time RPC threw or timed out, falling back to local clock', e);
     }
     // Fallback: use client time (better than nothing, but NOT server-verified —
     // mark it so callers can refuse to anchor start/pause/resume/stop on it).
@@ -1004,28 +1040,41 @@
   async function flushPersistTimer(){ return await persistTimer(); }
 
   /* ── PENDING LOG (durability net around the save itself) ───────────────────
+   * WHEN IS THIS CREATED? Only at STOP — never at Start. While a session is
+   * actively running, there's nothing to "draft": the already-durable
+   * `timer:<userId>` record (written at Start/Pause/Resume, see persistTimer
+   * above) stores started_at + accumulated_seconds, and the true elapsed
+   * time can always be recomputed on demand as
+   * (serverNow − started_at) + accumulated_seconds. No separate draft is
+   * needed until Stop actually produces one final, fixed number that needs
+   * to survive until it's written permanently.
+   *
    * THE ORIGINAL BUG: stopTimerAndLog() flipped the cloud timer record to
    * 'idle' immediately, then showed a "Save session" confirmation modal, and
    * ONLY wrote the finished session into the ledger / totals once the user
    * explicitly tapped "Save session". Between those two moments, the
    * completed session existed ONLY as a JS variable in one browser tab. If
-   * that tab closed — phone locked and the browser killed the background
-   * tab, the network dropped, the page crashed, the laptop lid closed —
-   * before the user tapped Save, the session vanished completely: not
-   * logged, not in the discard audit table, not recoverable on reload. No
-   * trace anywhere. Removing the manual confirmation step closes most of
-   * that gap outright — there is no click left to wait for.
+   * that tab closed before the user tapped Save, the session vanished
+   * completely — not logged, not recoverable on reload, no trace anywhere.
+   * Removing the manual confirmation step closes most of that gap outright.
    *
-   * WHAT'S LEFT: even with an automatic save, the write to Supabase can
-   * still fail (offline, a dropped request, a rejected write). So the
-   * instant Stop computes a valid elapsed duration — BEFORE any network
-   * call that could fail — it's written to its own durable row here. On the
-   * next boot (same tab, later; same device; or even a different device on
-   * the same account), if this row still exists it means the save never
-   * actually landed, so finalizeAndSaveSession() is called again
-   * automatically — no modal, no user action needed — instead of silently
-   * losing the hours. The row is only ever deleted once the ledger write is
-   * CONFIRMED to have succeeded. */
+   * THE GAP THAT'S STILL HONEST TO CALL OUT: this pending-log row is itself
+   * just another network write, and a network write can fail for the exact
+   * same reasons the original ledger write could. If THIS write also fails
+   * — and the subsequent ledger insert in finalizeAndSaveSession also fails
+   * — and the tab is closed before either succeeds, the session is lost
+   * with no durable trace, the same way the original bug lost sessions.
+   * Nothing here can make an in-memory value survive a closed tab with zero
+   * network — that's a hard limit of a client-only app with no offline
+   * queue. What this CAN do, and does below, is make that window as small
+   * as realistically possible: retry this write hard (not just once), and
+   * if it still hasn't landed, keep retrying it in the background for as
+   * long as the tab stays open — the same pattern scheduleLedgerRetry()
+   * already uses for the ledger insert itself, running in parallel with it.
+   * As long as the tab stays open through a temporary network blip, both
+   * paths keep trying and one of them will land. The only scenario that can
+   * still lose data is "network down AND tab closed within the same short
+   * window," which is the practical floor for this architecture. */
   function pendingLogCloudKey(){ return 'pendinglog:'+state.id; }
 
   async function persistPendingLog(entry){
@@ -1035,16 +1084,36 @@
       return !!ok;
     }catch(e){ console.error('persistPendingLog', e); return false; }
   }
-  /** persistPendingLog() with one retry + user warning, mirroring
-   * persistTimerOrWarn() below — the finished-session record deserves the
-   * exact same durability guarantee the timer state already gets. */
+  /** persistPendingLog() with several retries (not just one) before falling
+   * back to a background retry loop. This is the single most important
+   * write in the whole save path — everything else's recoverability
+   * depends on this row actually landing — so it gets the most persistent
+   * retry treatment of any write in this file. */
   async function persistPendingLogOrWarn(){
-    let ok = await persistPendingLog(pendingLogDraft);
-    if(!ok) ok = await persistPendingLog(pendingLogDraft); // one retry
+    const ts = pendingLogDraft && pendingLogDraft.ts;
+    let ok = false;
+    for(let attempt=0; attempt<5 && !ok; attempt++){
+      if(attempt>0) await new Promise(r=>setTimeout(r, 1000*attempt));
+      ok = await persistPendingLog(pendingLogDraft);
+    }
     if(!ok){
-      showToast('Saving over a weak connection', 'This finished session is being saved, but the connection looks unstable. Please keep this tab open a little longer so it can finish confirming — it will keep retrying automatically.');
+      showToast('Saving over a weak connection', 'This finished session is being saved, but the connection looks unstable. Please keep this tab open until it confirms — it will keep retrying automatically, including this safety-net step.');
+      schedulePendingLogRetry(ts);
     }
     return ok;
+  }
+  /** Background safety net for the pending-log write itself, mirroring
+   * scheduleLedgerRetry() below. Runs independently and in parallel with
+   * it — whichever succeeds first (this write landing, or the ledger
+   * insert succeeding outright) closes the gap. */
+  function schedulePendingLogRetry(ts, attemptsLeft){
+    attemptsLeft = attemptsLeft==null ? 8 : attemptsLeft;
+    if(attemptsLeft<=0) return;
+    setTimeout(async ()=>{
+      if(!pendingLogDraft || pendingLogDraft.ts!==ts) return; // already resolved (saved, or superseded) elsewhere
+      const ok = await persistPendingLog(pendingLogDraft);
+      if(!ok) schedulePendingLogRetry(ts, attemptsLeft-1);
+    }, 15000);
   }
   async function clearPendingLog(){
     if(!state.id || !sb) return;
@@ -1057,6 +1126,35 @@
       if(r && r.value) return JSON.parse(r.value);
     }catch(e){ /* nothing pending, or unreadable — treat as none */ }
     return null;
+  }
+
+  /* ── LOCAL PENDING LOG (survives "network down the instant Stop is
+   * clicked, tab closes right after") ─────────────────────────────────────
+   * persistPendingLog() above still needs a network round-trip, so it can
+   * fail exactly like any other request during a real outage. localStorage
+   * cannot fail that way — it's a synchronous write to this device's own
+   * disk with no network involved at all. Writing here FIRST, before any
+   * network call is even attempted, means the finished session survives on
+   * THIS device/browser no matter how immediately the tab closes afterward.
+   * It only covers "same browser, later" (not a different device — the
+   * Supabase row above is still what makes cross-device recovery possible)
+   * but it closes the very last real gap: zero network at the exact moment
+   * of Stop, tab closed a second later. On the next load of this app in
+   * this same browser — five minutes, five hours, or five days later — this
+   * is checked and the session is finished being saved automatically. */
+  function pendingLogLocalKey(){ return 'studygrid_pendinglog_local:'+(state.id||'anon'); }
+  function persistPendingLogLocal(entry){
+    try{ localStorage.setItem(pendingLogLocalKey(), JSON.stringify(entry)); return true; }
+    catch(e){ console.warn('persistPendingLogLocal failed (private browsing / storage full?)', e); return false; }
+  }
+  function loadPendingLogLocal(){
+    try{
+      const raw = localStorage.getItem(pendingLogLocalKey());
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ return null; }
+  }
+  function clearPendingLogLocal(){
+    try{ localStorage.removeItem(pendingLogLocalKey()); }catch(e){ /* best effort */ }
   }
 
   /* ── FINALIZE + SAVE (the whole Stop→saved path, atomically, no modal) ─────
@@ -1086,7 +1184,12 @@
     const ts  = existingTs || Date.now();
     const finalizedEntry = { ts, hours: hrs, note: topic || 'General Focus', started_at: startedAt || null };
 
-    // Step 1 — show it immediately, tagged as still-saving.
+    // Step 1 — show it immediately, tagged as still-saving. pendingLogDraft
+    // is expected to already be set by the caller (stopTimerAndLog /
+    // recoverPendingLogIfAny) before this runs — applyTimerUI() reads it to
+    // freeze the timer clock on the real elapsed value and greys out the
+    // buttons, instead of the UI resetting to 00:00:00 before the save is
+    // actually confirmed.
     const liveIdx = state.sessionHistory.findIndex(s=>s.isLive);
     if(liveIdx!==-1){
       state.sessionHistory[liveIdx] = { ...finalizedEntry, saving:true };
@@ -1094,6 +1197,7 @@
       state.sessionHistory.unshift({ ...finalizedEntry, saving:true });
     }
     render();
+    applyTimerUI();
 
     // Step 2 — has this exact session already landed (recovery / other device)?
     let alreadySaved = false;
@@ -1117,15 +1221,24 @@
     const idxNow = state.sessionHistory.findIndex(s=>s.ts===ts);
     if(ledgerOk){
       // Step 4 — confirmed. Drop the 'saving' tag, bump totals, clear the net.
+      // Only NOW does pendingLogDraft become null, which is the one thing
+      // that flips the timer widget from its frozen "Saving…" state back to
+      // a true, zeroed-out READY state — see applyTimerUI().
       if(idxNow!==-1) state.sessionHistory[idxNow] = finalizedEntry;
       await addStudyHoursRecord(hrs); // shows the "Session logged" toast itself
       pendingLogDraft = null;
       await clearPendingLog();
+      clearPendingLogLocal();
+      applyTimerUI();
     } else {
       // Not confirmed yet — keep it visibly pending, keep the recovery row,
       // and keep trying in the background so the user isn't stuck babysitting a tab.
+      // The timer widget stays frozen/greyed (pendingLogDraft is still set)
+      // for exactly as long as this is genuinely unresolved.
       if(idxNow!==-1) state.sessionHistory[idxNow] = { ...finalizedEntry, saving:true, saveFailed:true };
+      if(pendingLogDraft) pendingLogDraft.saveFailed = true;
       render();
+      applyTimerUI();
       const detail = (lastErr && (lastErr.message || lastErr.code)) || 'connection problem';
       showToast('Still saving…', 'This session is queued (' + detail + ') and will keep retrying automatically. It stays safely recorded in this app — don\'t clear your browser data until it confirms.');
       scheduleLedgerRetry(finalizedEntry, hrs, ts);
@@ -1152,6 +1265,8 @@
         await addStudyHoursRecord(hrs);
         pendingLogDraft = null;
         await clearPendingLog();
+        clearPendingLogLocal();
+        applyTimerUI();
       } else {
         scheduleLedgerRetry(finalizedEntry, hrs, ts, attemptsLeft-1);
       }
@@ -1161,10 +1276,12 @@
   /** Called from both boot paths (returning user with a local cache, and a
    * fresh login on a new device/browser) right after we've established
    * there's no active/paused timer to restore. If a pending-log row still
-   * exists, the save from a previous Stop never actually confirmed — so
-   * recover it and try to finalize it again automatically, right now, with
-   * no user action required. This is the recovery half of the durability
-   * net described in the "PENDING LOG" comment block above persistPendingLog().
+   * exists — in Supabase (any device) or in this browser's own localStorage
+   * (this device only, see loadPendingLogLocal() above) — the save from a
+   * previous Stop never actually confirmed, so recover it and try to
+   * finalize it again automatically, right now, with no user action
+   * required. This is the recovery half of the durability net described in
+   * the "PENDING LOG" / "LOCAL PENDING LOG" comment blocks above.
    *
    * Returns true if a genuinely-unresolved session was found AND it still
    * couldn't be confirmed just now (so the caller should hold off starting
@@ -1172,7 +1289,19 @@
    * and saved successfully just now, or it turned out to already be safely
    * in the ledger. */
   async function recoverPendingLogIfAny(){
-    const pending = await loadPendingLog();
+    // Cloud copy is checked first (it's the cross-device source of truth).
+    // If it's missing, fall back to this device's local copy — the only way
+    // that differs from the cloud copy is if the cloud write itself never
+    // landed at Stop time, which is exactly the case this exists to cover.
+    let pending = await loadPendingLog();
+    let fromLocalOnly = false;
+    if(!pending || !(pending.elapsedMs > 0)){
+      const local = loadPendingLogLocal();
+      if(local && local.elapsedMs > 0){
+        pending = local;
+        fromLocalOnly = true;
+      }
+    }
     if(!pending || !(pending.elapsedMs > 0)) return false;
 
     // GUARD AGAINST DOUBLE-LOGGING: this pending row is only a leftover
@@ -1188,12 +1317,19 @@
       if(rows && rows.some(r => r.started_at === pending.started_at)){
         pendingLogDraft = null;
         await clearPendingLog();
+        clearPendingLogLocal();
         return false;
       }
     }
 
     pendingLogDraft = pending;
     showToast('Recovering a session', 'A session was stopped earlier but never confirmed — saving it now.');
+    if(fromLocalOnly){
+      // The cloud copy never landed at Stop time (that's why we only found
+      // this locally) — seed it now too, so this session becomes
+      // recoverable from any device from this point on, not just this one.
+      await persistPendingLogOrWarn();
+    }
     const ok = await finalizeAndSaveSession(pending.elapsedMs, pending.topic || 'General Focus', pending.started_at, pending.ts);
     return !ok; // still unresolved → block a new session until this clears
   }
@@ -1429,7 +1565,17 @@
   }
 
   /* ── STOP ───────────────────────────────────────────────────────────────── */
+  let stopInProgress = false; // guards against a double-click firing two overlapping stop/save flows before the button visually greys out
   async function stopTimerAndLog(){
+    if(stopInProgress) return;
+    stopInProgress = true;
+    try{
+      await stopTimerAndLogInner();
+    } finally {
+      stopInProgress = false;
+    }
+  }
+  async function stopTimerAndLogInner(){
     // SERVER-SIDE ELAPSED COMPUTATION
     // The old approach used getElapsedMs() = Date.now() - started_at, which is
     // 100% client-side. On mobile (especially Chrome on Android/iOS), the browser
@@ -1453,20 +1599,41 @@
     let elapsedMs;
     let segmentBad = false;
     if(snapshotRecord.status === 'active' && snapshotRecord.started_at){
-      let serverStopIso = await window.getServerNow();
-      if(!window.lastServerSyncOK) serverStopIso = await window.getServerNow(); // one retry — covers a transient blip
+      // Try harder than "one retry" before giving up — this matters most
+      // exactly when it's most likely to happen: right after a laptop
+      // wakes from sleep or a phone's screen turns back on, when the OS
+      // reports "online" before the network is actually usable again. Each
+      // attempt now fails fast on its own (see withTimeout / SB_TIMEOUT_MS
+      // above) instead of possibly hanging, so a few attempts here still
+      // resolves in well under a minute.
+      let serverStopIso = null;
+      for(let attempt=0; attempt<3 && !window.lastServerSyncOK; attempt++){
+        if(attempt>0) await new Promise(r=>setTimeout(r, 2000));
+        serverStopIso = await window.getServerNow();
+      }
+
+      // THE REAL BUG THIS FIXES: if the server clock still can't be reached
+      // after those retries, this used to fall through and DISCARD THE
+      // ENTIRE SESSION — including hours that were already safely banked
+      // from before this last active segment. That's exactly backwards:
+      // Pause/Resume/Start all refuse to act when the server clock is
+      // unreachable and leave the existing state untouched — Stop should
+      // do the same, not destroy data. A temporary connectivity hiccup
+      // right when someone finishes an 8-hour session must never cost them
+      // the whole session; it should just ask them to try Stop again in a
+      // moment, with the timer still safely running in the meantime.
+      if(!window.lastServerSyncOK){
+        console.error('STUDYGRID: stop time not server-verified after retries — refusing to stop, timer left running', {started_at: snapshotRecord.started_at});
+        timerRecord = snapshotRecord; // restore — do not lose the running session
+        startTick();
+        applyTimerUI();
+        showToast('Can\'t reach server clock', 'Your session is still running and nothing has been lost — please check your connection and press Stop again in a moment.');
+        return;
+      }
+
       const serverStopMs  = new Date(serverStopIso).getTime();
       const startedAtMs   = new Date(snapshotRecord.started_at).getTime();
       const segmentMs     = Math.max(0, serverStopMs - startedAtMs);
-      // If getServerNow() couldn't reach the server, serverStopIso is a LOCAL
-      // fallback timestamp being subtracted from a SERVER-anchored started_at.
-      // That mixes two different clocks — the result can look perfectly
-      // plausible (pass isPlausibleSegmentMs) and still be wrong by however
-      // much the device clock is skewed. Treat it as untrustworthy too.
-      if(!window.lastServerSyncOK){
-        console.error('STUDYGRID: stop time not server-verified, discarding segment', {segmentMs, started_at: snapshotRecord.started_at, serverStopIso});
-        segmentBad = true;
-      }
       if(!isPlausibleSegmentMs(segmentMs)){
         segmentBad = true;
         console.error('STUDYGRID: implausible stop segment discarded', {segmentMs, started_at: snapshotRecord.started_at, serverStopIso});
@@ -1479,14 +1646,22 @@
     }
     if(!isPlausibleSegmentMs(elapsedMs)) segmentBad = true;
 
-    // Go idle immediately — timer is done.
+    // Compute the note/started_at now, while the isLive placeholder is
+    // still in state.sessionHistory — needed below either way.
+    const liveEntryForPending = state.sessionHistory.find(s=>s.isLive);
+    const topic     = (liveEntryForPending && liveEntryForPending.note) || snapshotRecord.topic || 'General Focus';
+    const startedAt = (liveEntryForPending && liveEntryForPending.started_at) || snapshotRecord.started_at || null;
+
+    // Go idle immediately server-side — the timer itself is done and must
+    // not keep ticking or be resumable. (This is separate from the UI: see
+    // below — the UI stays frozen on the real elapsed value, not 00:00:00,
+    // until the save is confirmed.)
     timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
     await persistTimer();
 
     const topicEl = document.getElementById('preSessionTopic');
     topicEl.disabled = false;
     topicEl.value    = '';
-    applyTimerUI();
 
     if(segmentBad){
       // Don't show the user a broken number to save — discard the corrupted
@@ -1494,6 +1669,7 @@
       state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
       saveProfile();
       if(state.rooms&&state.rooms.length) await syncGroupSelf();
+      applyTimerUI(); // no pendingLogDraft here → true idle/zero
       render();
       showToast('Session not saved', 'Time sync looked wrong for this session, so it was discarded instead of saving a broken duration. Nothing was added to your total.');
       return;
@@ -1506,21 +1682,30 @@
       state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
       saveProfile();
       if(state.rooms&&state.rooms.length) await syncGroupSelf();
+      applyTimerUI(); // no pendingLogDraft here → true idle/zero
       render();
       return;
     }
 
     // AUTO-SAVE — no confirmation modal. Stopping the timer IS saving it.
-    // DURABILITY FIRST: record this finished session in its own durable row
-    // in Supabase BEFORE attempting the real ledger write — see
-    // persistPendingLog() above. This is what makes the session recoverable
-    // on next boot if the tab dies mid-save, instead of the hours ever
-    // living only in this one tab's memory.
-    const liveEntryForPending = state.sessionHistory.find(s=>s.isLive);
-    const topic     = (liveEntryForPending && liveEntryForPending.note) || snapshotRecord.topic || 'General Focus';
-    const startedAt = (liveEntryForPending && liveEntryForPending.started_at) || snapshotRecord.started_at || null;
+    // THE TIMER WIDGET STAYS FROZEN, NOT ZEROED: pendingLogDraft is set
+    // BEFORE applyTimerUI() runs, so the clock shows this session's real
+    // final duration and the Stop button greys out into "Saving…" — it
+    // does NOT flash back to a blank 00:00:00 "Start Session" screen while
+    // the save is still in flight. It only truly resets once
+    // finalizeAndSaveSession() confirms the write and clears
+    // pendingLogDraft (see applyTimerUI() and Step 4 there).
+    //
+    // DURABILITY FIRST, LOCAL BEFORE NETWORK: write to this device's own
+    // localStorage synchronously — cannot fail from a bad connection — so
+    // even "zero network right now, tab closes a second later" survives on
+    // this device (see loadPendingLogLocal() above). THEN attempt the
+    // Supabase durability row (adds cross-device recovery), THEN the real
+    // ledger write.
     const ts = Date.now();
     pendingLogDraft = { ts, elapsedMs, topic, started_at: startedAt };
+    persistPendingLogLocal(pendingLogDraft);
+    applyTimerUI();
     await persistPendingLogOrWarn();
 
     await finalizeAndSaveSession(elapsedMs, topic, startedAt, ts);
@@ -1588,7 +1773,16 @@
     const s        = timerRecord.status;
     const isActive = s==='active';
     const isPaused = s==='paused';
-    const isIdle   = s==='idle';
+    // A session was just stopped but isn't confirmed saved yet — driven by
+    // pendingLogDraft, the same durable marker finalizeAndSaveSession() and
+    // recoverPendingLogIfAny() use. THIS IS THE FIX for the timer resetting
+    // to 00:00:00 (and the buttons flipping back to "Start") the instant
+    // Stop is clicked, before the save is actually confirmed. As long as
+    // pendingLogDraft is set, the clock stays frozen on the real elapsed
+    // value and Start stays hidden — nothing resets until the save truly
+    // lands (or is confirmed already-saved during recovery).
+    const isSaving = s==='idle' && !!pendingLogDraft;
+    const isIdle   = s==='idle' && !isSaving;
 
     const hero    = document.getElementById('timerHero');
     const display = document.getElementById('timerDisplay');
@@ -1604,6 +1798,8 @@
     document.getElementById('timerStop').style.display          = isActive ? '' : 'none';
     document.getElementById('timerResume').style.display        = isPaused ? '' : 'none';
     document.getElementById('timerStopFromPause').style.display = isPaused ? '' : 'none';
+    document.getElementById('timerSaving').style.display        = isSaving ? '' : 'none';
+    document.getElementById('timerSavingLabel').textContent     = (pendingLogDraft && pendingLogDraft.saveFailed) ? 'Still saving — retrying…' : 'Saving…';
 
     // --- hero card ---
     hero.classList.toggle('running', isActive);
@@ -1624,6 +1820,16 @@
       label.className   = 'paused-lbl';
       sub.textContent = 'Session paused · '+timerRecord.topic+' · Click Resume to continue';
       display.textContent = fmtClock(getElapsedMs());
+      field.style.display = 'none';
+      banner.style.display= 'none';
+    } else if(isSaving){
+      label.textContent = pendingLogDraft.saveFailed ? 'RETRYING' : 'SAVING';
+      label.className   = pendingLogDraft.saveFailed ? 'paused-lbl' : 'live';
+      sub.textContent   = pendingLogDraft.saveFailed
+        ? 'Your last session is queued and retrying automatically — nothing has been lost.'
+        : 'Confirming your last session with the server…';
+      // Frozen on the real final duration — never 00:00:00 here.
+      display.textContent = fmtClock(pendingLogDraft.elapsedMs);
       field.style.display = 'none';
       banner.style.display= 'none';
     } else {
