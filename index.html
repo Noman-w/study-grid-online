@@ -500,21 +500,11 @@
   </div>
 </div>
 
-<div class="modal-bg" id="logModal">
-  <div class="modal">
-    <div class="modal-title" id="logModalTitle">Save your session</div>
-    <div class="modal-desc" id="logModalDesc">Session complete. Add a note if needed.</div>
-    <div class="session-time-badge mono" id="logTimeBadge">00:00:00</div>
-    <div class="field">
-      <label class="field-label">Additional notes (optional)</label>
-      <textarea id="logNoteInput" placeholder="e.g. Completed Ch.4 problem set, reviewed errors" style="min-height:90px;"></textarea>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-block" id="logCancel">Discard session</button>
-      <button class="btn btn-primary btn-block" id="logSubmit">Save session</button>
-    </div>
-  </div>
-</div>
+<!-- The old "Save your session" confirmation modal is gone on purpose.
+     Stopping the timer now saves the session immediately and automatically
+     (see finalizeAndSaveSession() in the script below) — no extra tap
+     required, and the session is never held hostage in browser memory
+     waiting on a click that might never come. -->
 
 <div class="modal-bg" id="groupModal">
   <div class="modal">
@@ -645,7 +635,7 @@
     }catch(e){ console.error('fetchSessionLedger', e); return null; }
   }
   async function insertSessionToLedger(userId, userName, entry){
-    if(!sb || !userId || !entry || !entry.ts || !(entry.hours>0)) return false;
+    if(!sb || !userId || !entry || !entry.ts || !(entry.hours>0)) return { ok:false, error:'missing sb/userId/entry' };
     try{
       // ignoreDuplicates → INSERT ... ON CONFLICT (user_id, ts) DO NOTHING.
       // This needs only INSERT privilege (never UPDATE), so it's safe to
@@ -659,9 +649,17 @@
         hours     : entry.hours,
         note      : entry.note || '',
       }, { onConflict: 'user_id,ts', ignoreDuplicates: true });
-      if(error){ console.error('insertSessionToLedger', error); return false; }
-      return true;
-    }catch(e){ console.error('insertSessionToLedger', e); return false; }
+      if(error){
+        // Log the REAL Postgres error (code/message/details/hint), not just
+        // a generic failure — this is what actually tells apart "genuine
+        // network drop" from "RLS policy rejected this" from "constraint
+        // mismatch". Open the browser console (F12) right after a failed
+        // save to see this.
+        console.error('insertSessionToLedger FAILED', { code:error.code, message:error.message, details:error.details, hint:error.hint });
+        return { ok:false, error };
+      }
+      return { ok:true };
+    }catch(e){ console.error('insertSessionToLedger threw', e); return { ok:false, error:e }; }
   }
   /** Audit trail for "Discard session" clicks — a permanent record of what
    * got thrown away and when, kept in its OWN insert-only table (not the
@@ -864,7 +862,6 @@
 
   let tickHandle      = null; // 1-second DOM refresh – does NOT drive elapsed
   let cachedRoomData    = {};   // {code: groupData}
-  let pendingTimerHours  = null;
   let pendingResourceCode = null;
   // Last object handed to persistPendingLog() — kept so persistPendingLogOrWarn()
   // can retry the exact same payload. See the "PENDING LOG" block below for why
@@ -1006,25 +1003,29 @@
   }
   async function flushPersistTimer(){ return await persistTimer(); }
 
-  /* ── PENDING LOG (durability fix for the Stop→confirm gap) ─────────────────
-   * THE BUG THIS FIXES: stopTimerAndLog() flips the cloud timer record to
-   * 'idle' immediately, then shows a "Save session" confirmation modal, and
-   * ONLY writes the finished session into the ledger / totals once the user
-   * explicitly taps "Save session". Between those two moments, the completed
-   * session used to exist ONLY as a JS variable (pendingTimerHours) in one
-   * browser tab. If that tab closed — phone locked and the browser killed
-   * the background tab, the network dropped, the page crashed, the laptop
-   * lid closed — before the user tapped Save, the session vanished
-   * completely: not logged, not in the discard audit table, not
-   * recoverable on reload. No trace anywhere.
+  /* ── PENDING LOG (durability net around the save itself) ───────────────────
+   * THE ORIGINAL BUG: stopTimerAndLog() flipped the cloud timer record to
+   * 'idle' immediately, then showed a "Save session" confirmation modal, and
+   * ONLY wrote the finished session into the ledger / totals once the user
+   * explicitly tapped "Save session". Between those two moments, the
+   * completed session existed ONLY as a JS variable in one browser tab. If
+   * that tab closed — phone locked and the browser killed the background
+   * tab, the network dropped, the page crashed, the laptop lid closed —
+   * before the user tapped Save, the session vanished completely: not
+   * logged, not in the discard audit table, not recoverable on reload. No
+   * trace anywhere. Removing the manual confirmation step closes most of
+   * that gap outright — there is no click left to wait for.
    *
-   * THE FIX: the instant Stop computes a valid elapsed duration — BEFORE
-   * the modal is even shown — write it to its own durable row in Supabase.
-   * On the next boot (same tab, same device later, or even a different
-   * device on the same account), if this row still exists it means neither
-   * Save nor Discard ever ran, so we recover it and re-open the exact same
-   * confirmation modal instead of silently losing the hours. The row is
-   * only ever deleted by the Save and Discard handlers themselves. */
+   * WHAT'S LEFT: even with an automatic save, the write to Supabase can
+   * still fail (offline, a dropped request, a rejected write). So the
+   * instant Stop computes a valid elapsed duration — BEFORE any network
+   * call that could fail — it's written to its own durable row here. On the
+   * next boot (same tab, later; same device; or even a different device on
+   * the same account), if this row still exists it means the save never
+   * actually landed, so finalizeAndSaveSession() is called again
+   * automatically — no modal, no user action needed — instead of silently
+   * losing the hours. The row is only ever deleted once the ledger write is
+   * CONFIRMED to have succeeded. */
   function pendingLogCloudKey(){ return 'pendinglog:'+state.id; }
 
   async function persistPendingLog(entry){
@@ -1041,7 +1042,7 @@
     let ok = await persistPendingLog(pendingLogDraft);
     if(!ok) ok = await persistPendingLog(pendingLogDraft); // one retry
     if(!ok){
-      showToast('Not saved to server', 'This finished session could not be confirmed with the server yet. Please keep this tab open until you tap "Save session" — closing it now risks losing the whole session.');
+      showToast('Saving over a weak connection', 'This finished session is being saved, but the connection looks unstable. Please keep this tab open a little longer so it can finish confirming — it will keep retrying automatically.');
     }
     return ok;
   }
@@ -1058,34 +1059,130 @@
     return null;
   }
 
+  /* ── FINALIZE + SAVE (the whole Stop→saved path, atomically, no modal) ─────
+   * This is the single place a finished session turns into a permanent
+   * ledger row. It is called the instant Stop produces a valid duration —
+   * never gated behind a confirmation click.
+   *
+   * Sequence, and why it's ordered this way:
+   *   1. The session is written into state.sessionHistory RIGHT AWAY, marked
+   *      `saving:true` (not `isLive`) so it is visible in the study log the
+   *      whole time — see the ghost-guard fix in renderStudyLog(). A session
+   *      must never blink out of view just because it's mid-save.
+   *   2. A duplicate check against started_at — guards against two devices,
+   *      or a boot-time recovery, confirming the exact same session twice.
+   *   3. The INSERT-only ledger write, retried with backoff. Because the
+   *      table itself refuses UPDATE/DELETE (see the RLS policy), a
+   *      confirmed row here can never later be silently altered or erased
+   *      by any bug in this file.
+   *   4. Only once that write is CONFIRMED do we bump totals/XP and clear
+   *      the durable pending-log row. If it never confirms, the entry stays
+   *      visibly marked "still saving" in the UI, the pending-log row stays
+   *      in Supabase, and a background retry (below) plus the next boot's
+   *      recovery keep trying — the session is never quietly dropped.
+   */
+  async function finalizeAndSaveSession(elapsedMs, topic, startedAt, existingTs){
+    const hrs = Math.round(elapsedMs / 1000) / 3600;
+    const ts  = existingTs || Date.now();
+    const finalizedEntry = { ts, hours: hrs, note: topic || 'General Focus', started_at: startedAt || null };
+
+    // Step 1 — show it immediately, tagged as still-saving.
+    const liveIdx = state.sessionHistory.findIndex(s=>s.isLive);
+    if(liveIdx!==-1){
+      state.sessionHistory[liveIdx] = { ...finalizedEntry, saving:true };
+    } else if(!state.sessionHistory.some(s=>s.ts===ts)){
+      state.sessionHistory.unshift({ ...finalizedEntry, saving:true });
+    }
+    render();
+
+    // Step 2 — has this exact session already landed (recovery / other device)?
+    let alreadySaved = false;
+    if(startedAt){
+      const existing = await fetchSessionLedger(state.id);
+      if(existing && existing.some(r=>r.started_at===startedAt)) alreadySaved = true;
+    }
+
+    // Step 3 — the durable, INSERT-only write, with retries.
+    let ledgerOk = alreadySaved;
+    let lastErr  = null;
+    if(!alreadySaved){
+      for(let attempt=0; attempt<3 && !ledgerOk; attempt++){
+        if(attempt>0) await new Promise(r=>setTimeout(r, 1200*attempt));
+        const res = await insertSessionToLedger(state.id, state.name, finalizedEntry);
+        ledgerOk = res.ok;
+        lastErr  = res.error;
+      }
+    }
+
+    const idxNow = state.sessionHistory.findIndex(s=>s.ts===ts);
+    if(ledgerOk){
+      // Step 4 — confirmed. Drop the 'saving' tag, bump totals, clear the net.
+      if(idxNow!==-1) state.sessionHistory[idxNow] = finalizedEntry;
+      await addStudyHoursRecord(hrs); // shows the "Session logged" toast itself
+      pendingLogDraft = null;
+      await clearPendingLog();
+    } else {
+      // Not confirmed yet — keep it visibly pending, keep the recovery row,
+      // and keep trying in the background so the user isn't stuck babysitting a tab.
+      if(idxNow!==-1) state.sessionHistory[idxNow] = { ...finalizedEntry, saving:true, saveFailed:true };
+      render();
+      const detail = (lastErr && (lastErr.message || lastErr.code)) || 'connection problem';
+      showToast('Still saving…', 'This session is queued (' + detail + ') and will keep retrying automatically. It stays safely recorded in this app — don\'t clear your browser data until it confirms.');
+      scheduleLedgerRetry(finalizedEntry, hrs, ts);
+    }
+    return ledgerOk;
+  }
+
+  /** Background safety net for a session that failed to confirm on the
+   * first burst of retries inside finalizeAndSaveSession(). Keeps trying
+   * every 20s, up to 6 times (~2 minutes), without requiring the user to do
+   * anything. If the tab closes before this succeeds, the pending-log row
+   * persisted above still makes the session fully recoverable on next boot
+   * (see recoverPendingLogIfAny()) — this is a convenience so a still-open
+   * tab self-heals the moment the network comes back, not the only safety net. */
+  function scheduleLedgerRetry(finalizedEntry, hrs, ts, attemptsLeft){
+    attemptsLeft = attemptsLeft==null ? 6 : attemptsLeft;
+    if(attemptsLeft<=0) return;
+    setTimeout(async ()=>{
+      if(!pendingLogDraft || pendingLogDraft.ts!==ts) return; // already resolved elsewhere
+      const res = await insertSessionToLedger(state.id, state.name, finalizedEntry);
+      if(res.ok){
+        const idxNow = state.sessionHistory.findIndex(s=>s.ts===ts);
+        if(idxNow!==-1) state.sessionHistory[idxNow] = finalizedEntry;
+        await addStudyHoursRecord(hrs);
+        pendingLogDraft = null;
+        await clearPendingLog();
+      } else {
+        scheduleLedgerRetry(finalizedEntry, hrs, ts, attemptsLeft-1);
+      }
+    }, 20000);
+  }
+
   /** Called from both boot paths (returning user with a local cache, and a
    * fresh login on a new device/browser) right after we've established
    * there's no active/paused timer to restore. If a pending-log row still
-   * exists, neither Save nor Discard ever ran for that stopped session — so
-   * recover it and re-open the same confirmation modal instead of letting it
-   * quietly vanish. This is the recovery half of the fix described in the
-   * "PENDING LOG" comment block above persistPendingLog(). */
-  /** Returns true if a genuinely-unresolved stopped session was found and
-   * the confirmation modal re-opened for it; false if there was nothing
-   * pending, or the pending row turned out to be a stale leftover for a
-   * session that's already safely in the ledger (silently cleaned up).
-   * startTimer() uses the return value to hard-block starting a new
-   * session until this one is actually saved or discarded. */
+   * exists, the save from a previous Stop never actually confirmed — so
+   * recover it and try to finalize it again automatically, right now, with
+   * no user action required. This is the recovery half of the durability
+   * net described in the "PENDING LOG" comment block above persistPendingLog().
+   *
+   * Returns true if a genuinely-unresolved session was found AND it still
+   * couldn't be confirmed just now (so the caller should hold off starting
+   * a new timer); false if there was nothing pending, or it was recovered
+   * and saved successfully just now, or it turned out to already be safely
+   * in the ledger. */
   async function recoverPendingLogIfAny(){
     const pending = await loadPendingLog();
     if(!pending || !(pending.elapsedMs > 0)) return false;
 
     // GUARD AGAINST DOUBLE-LOGGING: this pending row is only a leftover
     // "was this ever confirmed?" marker — it's possible the session already
-    // made it into the permanent ledger (e.g. an earlier reconcile's retry
-    // succeeded after the row was written, or another device already logged
-    // it) even though this specific row was never cleared. If we blindly
-    // re-open the Save modal and the user taps Save again, that would insert
-    // a SECOND ledger row for the same session (different ts = not caught by
-    // the ON CONFLICT dedupe) and silently double-count the hours. started_at
-    // is set once at the original Start and never changes across pause/
-    // resume, so it's a reliable match key — two real sessions from the same
-    // user starting in the same server millisecond isn't realistic.
+    // made it into the permanent ledger (e.g. an earlier retry succeeded
+    // after the row was written, or another device already logged it) even
+    // though this specific row was never cleared. started_at is set once at
+    // the original Start and never changes across pause/resume, so it's a
+    // reliable match key — two real sessions from the same user starting in
+    // the same server millisecond isn't realistic.
     if(pending.started_at){
       const rows = await fetchSessionLedger(state.id);
       if(rows && rows.some(r => r.started_at === pending.started_at)){
@@ -1095,22 +1192,10 @@
       }
     }
 
-    pendingTimerHours = pending.elapsedMs;
-    pendingLogDraft   = pending;
-    if(!state.sessionHistory.find(s=>s.isLive)){
-      state.sessionHistory.unshift({
-        ts        : pending.ts || Date.now(),
-        hours     : 0,
-        note      : pending.topic || 'General Focus',
-        isLive    : true,
-        started_at: pending.started_at || null,
-      });
-    }
-    document.getElementById('logTimeBadge').textContent = fmtClock(pending.elapsedMs);
-    document.getElementById('logNoteInput').value = '';
-    openModal('logModal');
-    showToast('Unsaved session recovered', 'A session was stopped earlier but never confirmed — please save or discard it now so it isn\'t lost.');
-    return true;
+    pendingLogDraft = pending;
+    showToast('Recovering a session', 'A session was stopped earlier but never confirmed — saving it now.');
+    const ok = await finalizeAndSaveSession(pending.elapsedMs, pending.topic || 'General Focus', pending.started_at, pending.ts);
+    return !ok; // still unresolved → block a new session until this clears
   }
 
   /** persistTimer() with one retry. Start/pause/resume/stop all anchor the
@@ -1205,15 +1290,12 @@
 
   /* ── START ──────────────────────────────────────────────────────────────── */
   async function startTimer(){
-    // HARD GATE: never let a new session start while a previous one is still
-    // waiting to be saved or discarded. Re-check the server's copy (not just
-    // this tab's local pendingTimerHours variable) so a session that was
-    // already resolved on another tab/device doesn't leave this one
-    // permanently stuck. This is what actually enforces "one session must be
-    // fully saved or discarded before another can begin" — the modal being
-    // visually on top was never a real guarantee on its own.
+    // HARD GATE: never let a new session start while a previous one still
+    // hasn't been confirmed saved. recoverPendingLogIfAny() re-checks the
+    // server's copy and tries to finalize it right now automatically — this
+    // only blocks if that attempt just failed too (e.g. genuinely offline).
     if(await recoverPendingLogIfAny()){
-      showToast('Finish your last session first', 'You have an unsaved session waiting — save or discard it before starting a new one.');
+      showToast('Still saving your last session', 'Your previous session hasn\'t been confirmed with the server yet and is retrying automatically — it\'ll unblock as soon as that finishes, or check your connection.');
       return;
     }
 
@@ -1428,25 +1510,20 @@
       return;
     }
 
-    pendingTimerHours = elapsedMs; // stored as ms, converted to hours on save
-    document.getElementById('logTimeBadge').textContent = fmtClock(elapsedMs);
-    document.getElementById('logNoteInput').value = '';
-
-    // DURABILITY FIX: record this finished-but-unconfirmed session in Supabase
-    // BEFORE the modal is shown — see persistPendingLog() above. This is what
-    // makes the session recoverable if the tab dies before Save/Discard is
-    // clicked, instead of the hours living only in the pendingTimerHours
-    // variable in this one tab.
+    // AUTO-SAVE — no confirmation modal. Stopping the timer IS saving it.
+    // DURABILITY FIRST: record this finished session in its own durable row
+    // in Supabase BEFORE attempting the real ledger write — see
+    // persistPendingLog() above. This is what makes the session recoverable
+    // on next boot if the tab dies mid-save, instead of the hours ever
+    // living only in this one tab's memory.
     const liveEntryForPending = state.sessionHistory.find(s=>s.isLive);
-    pendingLogDraft = {
-      ts        : Date.now(),
-      elapsedMs : elapsedMs,
-      topic     : (liveEntryForPending && liveEntryForPending.note) || snapshotRecord.topic || 'General Focus',
-      started_at: (liveEntryForPending && liveEntryForPending.started_at) || snapshotRecord.started_at || null,
-    };
+    const topic     = (liveEntryForPending && liveEntryForPending.note) || snapshotRecord.topic || 'General Focus';
+    const startedAt = (liveEntryForPending && liveEntryForPending.started_at) || snapshotRecord.started_at || null;
+    const ts = Date.now();
+    pendingLogDraft = { ts, elapsedMs, topic, started_at: startedAt };
     await persistPendingLogOrWarn();
 
-    openModal('logModal');
+    await finalizeAndSaveSession(elapsedMs, topic, startedAt, ts);
     if(state.rooms&&state.rooms.length) await syncGroupSelf();
   }
 
@@ -2049,8 +2126,13 @@
     state.sessionHistory.slice(0,20).forEach(s=>{
       let dateStr, hoursText, noteHtml;
       if(s.isLive){
-        // Ghost guard: only show the live entry if the timer is actually running or paused.
-        // If timerRecord is idle, this is a leftover placeholder — skip it entirely.
+        // Ghost guard: only show the live placeholder if the timer is
+        // actually running or paused. If timerRecord is idle, this is a
+        // stale leftover — skip it entirely. NOTE: this guard must never
+        // apply to a `saving` entry below — a session that has already
+        // stopped and is mid-save is real, finished time, not a ghost, and
+        // hiding it here is exactly what used to make a saved session
+        // appear to "vanish" between Stop and confirmation.
         if(timerRecord.status === 'idle') return;
 
         // Show the real time start from started_at stored in the placeholder
@@ -2063,6 +2145,19 @@
         hoursText = fmtClock(getElapsedMs());
         const statusIcon = timerRecord.status === 'paused' ? '⏸ Paused' : '▶ Live';
         noteHtml  = `<span style="color:var(--teal);font-weight:600;">${statusIcon} — ${escapeHtml(s.note)}</span>`;
+      } else if(s.saving){
+        // Elapsed time is final and already captured — this row is always
+        // shown, regardless of timerRecord.status, while the ledger write
+        // confirms or retries in the background.
+        const d       = new Date(s.ts);
+        const dateLabel = d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+        dateStr   = s.started_at
+          ? dateLabel + ' · ' + new Date(s.started_at).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})
+          : dateLabel;
+        hoursText = fmtSessionHours(s.hours);
+        const label = s.saveFailed ? '⚠ Retrying save' : '● Saving…';
+        const color = s.saveFailed ? 'var(--amber)' : 'var(--teal)';
+        noteHtml  = `<span style="color:${color};font-weight:600;">${label} — ${escapeHtml(s.note)}</span>`;
       } else {
         const d       = new Date(s.ts);
         const endTime = d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
@@ -2082,7 +2177,7 @@
       row.className = 'log-row';
       row.innerHTML = `
         <div class="ld-date">${dateStr}</div>
-        <div class="ld-hours mono" style="color:${s.isLive?'var(--teal)':''};">${hoursText}</div>
+        <div class="ld-hours mono" style="color:${(s.isLive||s.saving)?'var(--teal)':''};">${hoursText}</div>
         <div class="ld-note">${noteHtml}</div>
       `;
       list.appendChild(row);
@@ -2451,129 +2546,8 @@
     document.getElementById('timerResume').onclick       = resumeTimer;
     document.getElementById('timerStopFromPause').onclick= stopTimerAndLog;
 
-    /* log modal */
-    document.getElementById('logCancel').onclick = async ()=>{
-      // Record what's being thrown away before it's gone — purely a
-      // diagnostic trail (see insertDiscardedSession), never shown in the
-      // UI and never counted in any totals.
-      if(pendingTimerHours && pendingTimerHours > 0){
-        const liveEntry = state.sessionHistory.find(s=>s.isLive);
-        insertDiscardedSession(state.id, state.name, {
-          ts        : Date.now(),
-          hours     : Math.round(pendingTimerHours/1000)/3600,
-          note      : (liveEntry && liveEntry.note) || '',
-          started_at: (liveEntry && liveEntry.started_at) || null,
-        }); // fire-and-forget — a failed audit write shouldn't block discarding
-      }
-      pendingTimerHours = null;
-      pendingLogDraft = null;
-      await clearPendingLog(); // the discard record above is the permanent trace now — safe to drop the recovery row
-      timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
-      await persistTimer();
-      state.sessionHistory = state.sessionHistory.filter(s=>!s.isLive);
-      saveProfile(); render(); closeModal('logModal');
-      if(state.rooms&&state.rooms.length) await syncGroupSelf();
-    };
-    document.getElementById('logSubmit').onclick = async ()=>{
-      const elapsedMs = pendingTimerHours; // stored as raw ms since last fix
-      const extraNote = document.getElementById('logNoteInput').value.trim();
-      if(!elapsedMs||elapsedMs<=0) return;
-      closeModal('logModal');
-      pendingTimerHours = null;
-
-      // Convert ms → hours at the last possible moment, rounded to nearest second
-      const hrs = Math.round(elapsedMs / 1000) / 3600;
-
-      // Finalize sessionHistory — convert the isLive placeholder into the real entry.
-      // Preserve started_at from the placeholder so the log can show start→end times.
-      // FALLBACK: on a recovered session (see recoverPendingLogIfAny), there may be
-      // no isLive placeholder in memory at all — use the durable pendingLogDraft
-      // (topic/started_at from the row we wrote in Supabase at Stop-time) instead,
-      // so a recovered session still finalizes correctly.
-      const liveIdx = state.sessionHistory.findIndex(s=>s.isLive);
-      let finalizedEntry = null;
-      if(liveIdx!==-1){
-        const topic      = state.sessionHistory[liveIdx].note;
-        const startedAt  = state.sessionHistory[liveIdx].started_at || null;
-        finalizedEntry = {
-          ts        : Date.now(),
-          hours     : hrs,
-          note      : topic+(extraNote?' — '+extraNote:''),
-          started_at: startedAt,
-        };
-        state.sessionHistory[liveIdx] = finalizedEntry;
-      } else if(pendingLogDraft){
-        finalizedEntry = {
-          ts        : Date.now(),
-          hours     : hrs,
-          note      : (pendingLogDraft.topic||'General Focus')+(extraNote?' — '+extraNote:''),
-          started_at: pendingLogDraft.started_at || null,
-        };
-        state.sessionHistory.unshift(finalizedEntry);
-      }
-
-      // PERMANENT RECORD — write this finished session to the append-only
-      // ledger before anything else touches it. This is an INSERT into a
-      // table this app's database key can only insert/select on; the
-      // database itself rejects UPDATE/DELETE against it. Once this call
-      // lands, no tab, no race, and no bug elsewhere in this file can
-      // silently erase or replace this session — only a deliberate manual
-      // change in Supabase can, which is exactly what was asked for.
-      //
-      // BUT: if BOTH attempts fail (e.g. a brief network drop right at Save
-      // time), this session is NOT yet durably recorded anywhere permanent.
-      // The optimistic totalHours bump below will still make the UI show
-      // "saved" in THIS tab — but loadProfile() unconditionally overwrites
-      // local state with the cloud copy on the next load (by design, so a
-      // manual Supabase fix always wins). If that stale cloud copy hasn't
-      // seen this session either (same network drop), the optimistic bump
-      // gets silently erased on next load with no error shown — this is
-      // exactly how a session that showed "Session logged!" can still
-      // vanish for good. ledgerOk tracks whether that actually happened.
-      //
-      // DOUBLE-SAVE GUARD: the ON CONFLICT below is keyed on (user_id, ts),
-      // where ts is a fresh Date.now() generated fresh on THIS click. That
-      // protects against retrying THIS exact save attempt, but NOT against
-      // two independent finalizations of the SAME underlying session — e.g.
-      // two devices on the same account both stopping and saving within the
-      // same instant, or a recovered session being confirmed twice. Both
-      // would carry the same `started_at` (fixed at the original Start) but
-      // different `ts`, so the (user_id, ts) constraint wouldn't catch it.
-      // Check for an existing row with this started_at first — this narrows
-      // the race a lot for real-world use, though it isn't perfectly atomic
-      // (see the follow-up note on a proper DB-level fix).
-      let ledgerOk = true;
-      if(finalizedEntry){
-        if(finalizedEntry.started_at){
-          const existing = await fetchSessionLedger(state.id);
-          if(existing && existing.some(r => r.started_at === finalizedEntry.started_at)){
-            ledgerOk = true; // already recorded elsewhere — treat as success, don't insert a duplicate
-            finalizedEntry = null; // skip the insert below
-          }
-        }
-      }
-      if(finalizedEntry){
-        ledgerOk = await insertSessionToLedger(state.id, state.name, finalizedEntry);
-        if(!ledgerOk) ledgerOk = await insertSessionToLedger(state.id, state.name, finalizedEntry); // one retry
-        if(!ledgerOk){
-          showToast('Session not yet confirmed', 'Could not reach the server to save this session. It is queued — reopen or reload the app once you\'re back online and you\'ll be asked to save it again. Don\'t clear browser data until then.');
-        }
-      }
-
-      timerRecord = { status:'idle', started_at:null, accumulated_seconds:0, topic:'' };
-      await flushPersistTimer();
-      await addStudyHoursRecord(hrs);
-
-      // Only drop the recovery row once the session is ACTUALLY durably
-      // recorded in the permanent ledger. If the insert failed, deliberately
-      // leave the row in place — recoverPendingLogIfAny() will offer this
-      // exact session back on the next load (any tab, any device) instead of
-      // letting a failed save disappear without a trace.
-      if(ledgerOk){
-        pendingLogDraft = null;
-        await clearPendingLog();
-      }
-    };
+    /* No log modal, no Save button to wire up — stopTimerAndLog() now saves
+     * the session itself, immediately, via finalizeAndSaveSession(). */
 
     /* settings */
     document.getElementById('settingsBtn').onclick = ()=>{
