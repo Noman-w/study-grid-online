@@ -1065,9 +1065,15 @@
    * recover it and re-open the same confirmation modal instead of letting it
    * quietly vanish. This is the recovery half of the fix described in the
    * "PENDING LOG" comment block above persistPendingLog(). */
+  /** Returns true if a genuinely-unresolved stopped session was found and
+   * the confirmation modal re-opened for it; false if there was nothing
+   * pending, or the pending row turned out to be a stale leftover for a
+   * session that's already safely in the ledger (silently cleaned up).
+   * startTimer() uses the return value to hard-block starting a new
+   * session until this one is actually saved or discarded. */
   async function recoverPendingLogIfAny(){
     const pending = await loadPendingLog();
-    if(!pending || !(pending.elapsedMs > 0)) return;
+    if(!pending || !(pending.elapsedMs > 0)) return false;
 
     // GUARD AGAINST DOUBLE-LOGGING: this pending row is only a leftover
     // "was this ever confirmed?" marker — it's possible the session already
@@ -1085,7 +1091,7 @@
       if(rows && rows.some(r => r.started_at === pending.started_at)){
         pendingLogDraft = null;
         await clearPendingLog();
-        return;
+        return false;
       }
     }
 
@@ -1104,6 +1110,7 @@
     document.getElementById('logNoteInput').value = '';
     openModal('logModal');
     showToast('Unsaved session recovered', 'A session was stopped earlier but never confirmed — please save or discard it now so it isn\'t lost.');
+    return true;
   }
 
   /** persistTimer() with one retry. Start/pause/resume/stop all anchor the
@@ -1198,6 +1205,18 @@
 
   /* ── START ──────────────────────────────────────────────────────────────── */
   async function startTimer(){
+    // HARD GATE: never let a new session start while a previous one is still
+    // waiting to be saved or discarded. Re-check the server's copy (not just
+    // this tab's local pendingTimerHours variable) so a session that was
+    // already resolved on another tab/device doesn't leave this one
+    // permanently stuck. This is what actually enforces "one session must be
+    // fully saved or discarded before another can begin" — the modal being
+    // visually on top was never a real guarantee on its own.
+    if(await recoverPendingLogIfAny()){
+      showToast('Finish your last session first', 'You have an unsaved session waiting — save or discard it before starting a new one.');
+      return;
+    }
+
     // Re-check the server first: if another tab/device already has an
     // active or paused session running, don't silently stomp on it by
     // starting a fresh one on top.
@@ -2511,7 +2530,28 @@
       // gets silently erased on next load with no error shown — this is
       // exactly how a session that showed "Session logged!" can still
       // vanish for good. ledgerOk tracks whether that actually happened.
+      //
+      // DOUBLE-SAVE GUARD: the ON CONFLICT below is keyed on (user_id, ts),
+      // where ts is a fresh Date.now() generated fresh on THIS click. That
+      // protects against retrying THIS exact save attempt, but NOT against
+      // two independent finalizations of the SAME underlying session — e.g.
+      // two devices on the same account both stopping and saving within the
+      // same instant, or a recovered session being confirmed twice. Both
+      // would carry the same `started_at` (fixed at the original Start) but
+      // different `ts`, so the (user_id, ts) constraint wouldn't catch it.
+      // Check for an existing row with this started_at first — this narrows
+      // the race a lot for real-world use, though it isn't perfectly atomic
+      // (see the follow-up note on a proper DB-level fix).
       let ledgerOk = true;
+      if(finalizedEntry){
+        if(finalizedEntry.started_at){
+          const existing = await fetchSessionLedger(state.id);
+          if(existing && existing.some(r => r.started_at === finalizedEntry.started_at)){
+            ledgerOk = true; // already recorded elsewhere — treat as success, don't insert a duplicate
+            finalizedEntry = null; // skip the insert below
+          }
+        }
+      }
       if(finalizedEntry){
         ledgerOk = await insertSessionToLedger(state.id, state.name, finalizedEntry);
         if(!ledgerOk) ledgerOk = await insertSessionToLedger(state.id, state.name, finalizedEntry); // one retry
