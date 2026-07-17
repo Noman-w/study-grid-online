@@ -21,15 +21,16 @@
     --glass-shadow-sm:0 8px 20px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.14);
   }
   *{box-sizing:border-box;margin:0;padding:0;}
-  /* ── BACKGROUND IMAGE (fixed, full-viewport, behind everything) ──────── */
+  /* ── BACKGROUND (solid blackish-violet, no image, no fixed-attachment) ─
+     Fixed background-image + 17 backdrop-filter glass panels was forcing a
+     full repaint of every blurred panel on each scroll frame — that's what
+     was causing the lag. Solid color removes that cost entirely. ────────── */
   html{
-    background-image: url('prof.avif');
-    background-size:cover;background-position:center;background-attachment:fixed;background-repeat:no-repeat;
-    /* Replace the URL above with your own image path if desired */
+    background:#0a0710;
   }
   html,body{background-color:transparent;color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
   body{
-    background-color:rgba(3,4,5,0.74); /* darker veil over the still image — glass panels stay clear, text now reads brighter */
+    background-color:#0a0710;
     background-image:linear-gradient(var(--line-soft) 1px,transparent 1px),linear-gradient(90deg,var(--line-soft) 1px,transparent 1px);
     background-size:32px 32px;background-position:center top;min-height:100vh;
   }
