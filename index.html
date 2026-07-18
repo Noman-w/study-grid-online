@@ -155,9 +155,9 @@
   .podium-slot.rank2{order:1;}
   .podium-slot.rank1{order:2;}
   .podium-slot.rank3{order:3;}
-  .p-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--violet),var(--teal));display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;color:#0a0d10;position:relative;box-shadow:0 8px 20px rgba(0,0,0,.4);}
-  .podium-slot.rank1 .p-avatar{width:86px;height:86px;font-size:22px;border:2px solid #ffd56b;box-shadow:0 0 28px rgba(255,213,107,.45);}
-  .p-crown{position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:20px;filter:drop-shadow(0 0 4px rgba(255,213,107,.6));}
+  .p-avatar{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;color:#0a0d10;position:relative;}
+  .podium-slot.rank1 .p-avatar{width:86px;height:86px;font-size:22px;}
+  .p-crown{position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:20px;filter:drop-shadow(0 0 4px rgba(255,213,107,.6));z-index:2;}
   .p-name{font-size:14px;font-weight:600;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;}
   .p-points{font-size:12px;color:var(--muted-dim);}
   .p-podium-block{width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:16px 16px 8px 8px;margin-top:8px;padding:14px 6px 10px;}
@@ -180,7 +180,7 @@
   .leader-row.me{border-color:rgba(79,227,193,.35);background:rgba(79,227,193,.06);}
   .leader-serial{grid-area:serial;font-family:'JetBrains Mono',monospace;color:var(--muted-dim);font-size:13px;text-align:center;}
   .leader-member{grid-area:member;display:flex;align-items:center;gap:10px;min-width:0;}
-  .leader-member .m-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--violet),var(--teal));display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#0a0d10;flex-shrink:0;}
+  .leader-member .m-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#0a0d10;position:relative;flex-shrink:0;}
   .leader-member .m-name-wrap{display:flex;flex-direction:column;min-width:0;line-height:1.35;gap:1px;}
   .leader-member .m-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;display:flex;align-items:center;gap:6px;min-width:0;}
   .leader-member .m-name-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
@@ -207,6 +207,24 @@
   .leader-progress .lp-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--teal),var(--violet));}
   .leader-progress .lp-stats{margin-top:5px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted-dim);display:flex;flex-wrap:wrap;gap:5px;}
   .leader-progress .lp-stats .lp-pct{color:var(--teal);}
+
+  /* leaderboard avatar wave — the avatar's ENTIRE visible face is one canvas
+     drawing (violet→teal gradient fill, same colours the flat circle always
+     used). There is no separate opaque circle underneath or on top of it
+     any more — .p-avatar/.m-avatar are now just an invisible sizing/centring
+     box for the initials + crown + status-dot, which sit above the canvas
+     via z-index. The canvas itself is always drawn, live or not: while a
+     member's timer is LIVE it ripples (sine wave around the rim); the
+     instant it's paused/stopped it's drawn as a perfectly plain circle —
+     same shape, same gradient, just flat, so there's never a mismatched
+     "half circle, half blob" moment. Rank-1's gold ring/glow is drawn
+     directly on that same shape (stroke + shadow) so it always traces the
+     avatar's actual current outline, wavy or not, instead of a fixed
+     circular border that would fight visually with a wavy fill under it. */
+  .avatar-wave{position:relative;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .avatar-wave .wave-canvas{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:0;height:0;pointer-events:none;z-index:0;}
+  .avatar-wave .avatar-letters{position:relative;z-index:1;}
+  .avatar-wave .status-dot{z-index:2;}
 
   /* visible themed scroll "slider" for the two independently-scrolling
      lists — the default 6px grey global scrollbar blends into the dark
@@ -2552,7 +2570,7 @@
       </div>
       <div class="room-grid">
         <div>
-          <div class="room-pane-title">Leaderboard</div>
+          <div class="room-pane-title">Leaderboard · 3,000 HR Progress</div>
           <div class="roster" id="roster-${code}"></div>
         </div>
         <div>
@@ -2748,7 +2766,12 @@
       const goalPct  = Math.min(100, (mTotal/GOAL_TOTAL)*100);
       const pacePerDay = mTotal / Math.max(1, m.daysActive||1);
 
-      return { ...m, rank:i+1, dotClass, statusLabel, statusColor, activityClass, activityHtml, goalPct, pacePerDay };
+      // "LIVE" (dotClass 'online') is the existing signal this app already
+      // uses to mean "this member's timer is running right now" — reused
+      // here, unchanged, to decide whether the avatar wave should animate.
+      const live = dotClass === 'online';
+
+      return { ...m, rank:i+1, dotClass, statusLabel, statusColor, activityClass, activityHtml, goalPct, pacePerDay, live };
     });
 
     const top3 = rows.slice(0,3);
@@ -2761,7 +2784,10 @@
         const crown = m.rank===1 ? '<span class="p-crown">♛</span>' : '';
         return `
           <div class="podium-slot ${rc}">
-            <div class="p-avatar">${crown}${initials(m.name)}<span class="status-dot ${m.dotClass}"></span></div>
+            <div class="avatar-wave" data-member-id="${m.id}" data-live="${m.live?1:0}" data-gold="${m.rank===1?1:0}">
+              <canvas class="wave-canvas"></canvas>
+              <div class="p-avatar">${crown}<span class="avatar-letters">${initials(m.name)}</span><span class="status-dot ${m.dotClass}"></span></div>
+            </div>
             <div class="p-name">${escapeHtml(m.name)}${m.id===state.id?' <span class="you-tag">YOU</span>':''}</div>
             <div class="p-points mono">${fmtHours(m.totalHours)}</div>
             <div class="p-podium-block"><div class="p-rank-num mono">#${m.rank}</div></div>
@@ -2773,7 +2799,10 @@
       <div class="leader-row${m.id===state.id?' me':''}">
         <div class="leader-serial">${m.rank}</div>
         <div class="leader-member">
-          <div class="m-avatar">${initials(m.name)}</div>
+          <div class="avatar-wave" data-member-id="${m.id}" data-live="${m.live?1:0}" data-gold="0">
+            <canvas class="wave-canvas"></canvas>
+            <div class="m-avatar"><span class="avatar-letters">${initials(m.name)}</span></div>
+          </div>
           <div class="m-name-wrap">
             <span class="m-name"><span class="m-name-text">${escapeHtml(m.name)}</span>${m.id===state.id?'<span class="you-tag">YOU</span>':''}</span>
             <span class="m-level">Lv.${m.level||1}${m.title?' · '+escapeHtml(m.title):''}</span>
@@ -2798,9 +2827,223 @@
         <div class="leader-table-body">${tableRows || '<div class="empty-mini">No members yet.</div>'}</div>
       </div>`;
 
+    mountAvatarWaves(roster);
+
     // keep the floating chat popup's collaborator strip in sync for whichever
     // room is currently active
     if(code === activeRoomCode) renderPopupCollab(rows);
+  }
+
+  /* ── LEADERBOARD AVATAR WAVE ────────────────────────────────────────────
+   * The canvas IS the avatar now — not a halo layered behind/around a
+   * separate opaque circle. .p-avatar/.m-avatar no longer paint anything
+   * themselves (see CSS above); they're just an invisible sizing box that
+   * centres the initials/crown/status-dot above the canvas via z-index.
+   *
+   * The canvas is always drawn, for every member, live or not:
+   *   - LIVE  → animated sine-wave ripple around the rim (unchanged motion
+   *             from before — frequency/speed/direction/phase per member).
+   *   - not   → drawn ONCE as a perfectly plain circle, same size/gradient,
+   *     LIVE    no animation loop wasted on it. The moment that member's
+   *             timer stops/pauses, the next roster refresh (see the
+   *             1-second tick in boot()) redraws them this way — the wave
+   *             literally becomes a circle again rather than swapping to a
+   *             different element.
+   *
+   * Rank-1's gold ring + glow (previously a fixed CSS border) is now drawn
+   * directly on this same path — a gold stroke plus a soft gold shadow
+   * behind the fill — so it always traces the avatar's actual current
+   * outline, wavy or flat, instead of a static ring that would visually
+   * fight a wavy fill underneath it.
+   *
+   * Every member gets their own randomized wave "personality" (frequency,
+   * speed, direction, phase, amplitude), generated on-device the moment we
+   * first see them — nothing is baked/pre-rendered, it's plain Math.random()
+   * plus a canvas re-drawn every frame. That personality is cached in
+   * waveSeeds so it stays the same for that member for the rest of the
+   * session, instead of re-rolling and jumping every time the roster
+   * re-renders.
+   *
+   * runRosterDOMEngine rebuilds roster.innerHTML from scratch every second
+   * (see the 1-second tick in boot()), so every <canvas> here is destroyed
+   * and replaced that often too. To keep the animation from stuttering or
+   * resetting each time that happens, the wave's motion is derived from the
+   * shared requestAnimationFrame timestamp (real elapsed time, never resets)
+   * rather than a per-canvas counter — so a brand new canvas just continues
+   * the motion exactly where the old one left off. waveCanvases is keyed by
+   * the canvas element itself (not the member id), so a member who's in both
+   * the podium AND the table gets two independently-drawn — but identically
+   * seeded — rings. Any canvas no longer in the DOM (member went idle, or
+   * simply got replaced by the next re-render) is quietly dropped the next
+   * time the shared loop runs over it. */
+  const waveSeeds    = new Map();  // memberId -> randomized wave personality
+  const waveCanvases = new Map();  // canvas element -> live draw info (LIVE members only)
+  let   waveLoopRunning = false;
+
+  /* ── TUNING ──────────────────────────────────────────────────────────
+   * Every knob for the wave's look/motion lives in the object below. Each
+   * member gets one random value inside the given range, picked once and
+   * reused (see getWaveSeed). To change the RANGE of possible values for
+   * everyone, edit the min/spread numbers here. To change one fixed value
+   * for ALL members instead of a random range, replace e.g.
+   *   freq: 4 + Math.floor(Math.random()*4)
+   * with a constant:
+   *   freq: 6
+   *
+   *   freq      — number of bumps/points around the shape. Integer only
+   *               (the ring must close with no seam). Bigger = spikier,
+   *               flower-like; smaller (3–4) = smoother, blob-like.
+   *               Currently: 5 to 8.
+   *   ampRatio  — how far the bumps push out, as a fraction of the
+   *               avatar's own radius. Bigger = more dramatic, steeper
+   *               bulge; 0 = perfectly still circle, no wave at all.
+   *               Currently: 0.18 to 0.30 (18%–30% of the radius).
+   *   waveHz    — how fast the bulge grows/shrinks (pulsing speed).
+   *               Bigger = faster pulse; smaller = slower, calmer breathing.
+   *               Currently: 0.0028 to 0.0044.
+   *   rotHz     — how fast the whole bump pattern spins around the
+   *               avatar. Bigger = faster spin; 0 = bumps pulse in place
+   *               without rotating.
+   *               Currently: 0.00045 to 0.00075.
+   *   phase     — random starting offset so different members' waves
+   *               aren't perfectly synced. Leave as Math.random()*Math.PI*2.
+   *   dir       — spin direction, -1 or 1. Leave as random unless you want
+   *               everyone spinning the same way. ─────────────────────── */
+  function getWaveSeed(id){
+    if(!waveSeeds.has(id)){
+      waveSeeds.set(id, {
+        freq:     5, // 5–8 bumps, integer so the ring closes with no seam
+        ampRatio: 0.07,        // amplitude as a fraction of the avatar's own radius
+        waveHz:   0.004,    // amplitude-oscillation speed (pulse speed)
+        rotHz:    0.0026,   // rotation speed (spin speed)
+        phase:    Math.random()*Math.PI*2,          // random starting phase so waves aren't synced
+        dir:      Math.random()<0.5 ? -1 : 1        // random rotation direction
+      });
+    }
+    return waveSeeds.get(id);
+  }
+
+  function mountAvatarWaves(container){
+    container.querySelectorAll('.avatar-wave').forEach(wrap=>{
+      const id       = wrap.dataset.memberId;
+      const live     = wrap.dataset.live === '1';
+      const gold     = wrap.dataset.gold === '1';
+      const canvas   = wrap.querySelector('canvas.wave-canvas');
+      const avatarEl = wrap.querySelector('.p-avatar, .m-avatar');
+      if(!id || !canvas || !avatarEl) return;
+
+      const size       = avatarEl.getBoundingClientRect().width || avatarEl.offsetWidth || 32;
+      const canvasSize = Math.round(size*1.7);
+      // Render at 2x extra resolution on top of the device's own pixel
+      // ratio, so the canvas bitmap stays crisp even if someone pinch-
+      // zooms in (e.g. to screenshot it up close) instead of going soft.
+      const dpr        = (window.devicePixelRatio||1) * 2;
+      canvas.width  = canvasSize*dpr;
+      canvas.height = canvasSize*dpr;
+      canvas.style.width  = canvasSize+'px';
+      canvas.style.height = canvasSize+'px';
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+
+      const info = { ctx, size:canvasSize, avatarSize:size, memberId:id, gold };
+      if(live){
+        waveCanvases.set(canvas, info);
+      }else{
+        // Not live: draw once as a perfectly plain circle (amplitude 0) and
+        // leave it alone — no point spending a rAF slot animating a shape
+        // that never changes. This is what makes a paused/stopped member's
+        // avatar "become a perfect circle" the instant the roster re-renders.
+        drawAvatarWave(info, 0, false);
+      }
+    });
+
+    if(!waveLoopRunning && waveCanvases.size){
+      waveLoopRunning = true;
+      requestAnimationFrame(waveLoop);
+    }
+  }
+
+  function waveLoop(t){
+    if(!waveCanvases.size){ waveLoopRunning = false; return; }
+    waveCanvases.forEach((info,canvas)=>{
+      if(!canvas.isConnected){ waveCanvases.delete(canvas); return; }
+      drawAvatarWave(info, t, true);
+    });
+    requestAnimationFrame(waveLoop);
+  }
+
+  function drawAvatarWave(info, t, live){
+    const { ctx, size, avatarSize, memberId, gold } = info;
+    const seed = getWaveSeed(memberId);
+
+    const cx = size/2, cy = size/2;
+    const baseRadius   = avatarSize/2;
+    const maxAmplitude = baseRadius * seed.ampRatio;
+    const waveTime     = t*seed.waveHz + seed.phase;
+    const rotationTime = t*seed.rotHz*seed.dir + seed.phase;
+    // 0.6 + 0.4*sin(...) keeps the envelope between 20% and 100% of
+    // maxAmplitude (never a plain sin, which swings through 0 — that's
+    // what made the bumps flatten out to a near-circle for a moment every
+    // half-cycle and read as "not steep"). This way there's always a
+    // visible, steep bump; it just breathes bigger and smaller over time.
+    // When not live, amplitude is forced to 0 — a perfectly flat circle,
+    // same radius the wave breathes around, so there's no size jump
+    // between a member's live and paused/stopped avatar.
+    const currentAmplitude = live ? maxAmplitude * (0.6 + 0.4*Math.sin(waveTime)) : 0;
+
+    ctx.clearRect(0,0,size,size);
+    ctx.beginPath();
+    for(let angle=0; angle<=Math.PI*2+0.001; angle+=0.05){
+      const r = baseRadius + currentAmplitude*Math.sin(seed.freq*angle);
+      const x = cx + r*Math.cos(angle+rotationTime);
+      const y = cy + r*Math.sin(angle+rotationTime);
+      if(angle===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+
+    // Filled with the exact same violet→teal 135° gradient the avatar's
+    // CSS background always used (--violet #9b8cff → --teal #4fe3c1) — this
+    // canvas shape now IS the avatar, not a ring floating around one.
+    const gradSpan = baseRadius + maxAmplitude;
+    const grad = ctx.createLinearGradient(
+      cx - gradSpan*Math.cos(Math.PI/4), cy - gradSpan*Math.sin(Math.PI/4),
+      cx + gradSpan*Math.cos(Math.PI/4), cy + gradSpan*Math.sin(Math.PI/4)
+    );
+    grad.addColorStop(0, '#9b8cff');
+    grad.addColorStop(1, '#4fe3c1');
+
+    if(gold){
+      // Soft gold glow behind the fill (replaces the old fixed
+      // box-shadow:0 0 28px rgba(255,213,107,.45) on the flat circle) —
+      // shadowBlur follows the fill's actual silhouette, so it hugs the
+      // wave when rippling instead of a static circular halo. Richer,
+      // more saturated amber-gold than the original pale rgba(255,213,107).
+      ctx.save();
+      ctx.shadowColor = 'rgba(255,176,0,.65)';
+      ctx.shadowBlur  = size*0.10;
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.restore();
+      // Crisp gold outline traced on the same path (replaces the old
+      // border:2px solid #ffd56b) — thinner than before, and a two-tone
+      // metallic gradient (bright highlight → deep amber) instead of one
+      // flat pale hex, so it reads as rich gold rather than pale yellow.
+      // Drawn without shadow so the line itself stays sharp; the glow
+      // above already provides the soft halo around it.
+      const strokeGrad = ctx.createLinearGradient(
+        cx - gradSpan*Math.cos(Math.PI/4), cy - gradSpan*Math.sin(Math.PI/4),
+        cx + gradSpan*Math.cos(Math.PI/4), cy + gradSpan*Math.sin(Math.PI/4)
+      );
+      strokeGrad.addColorStop(0,   '#fff0b3');
+      strokeGrad.addColorStop(0.5, '#ffb300');
+      strokeGrad.addColorStop(1,   '#c98a00');
+      ctx.lineWidth = Math.max(1.4, size*0.012);
+      ctx.strokeStyle = strokeGrad;
+      ctx.stroke();
+    }else{
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
   }
 
   /* collaborators strip shown at the top of the floating chat popup */
