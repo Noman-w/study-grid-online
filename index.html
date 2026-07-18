@@ -20,6 +20,16 @@
     --glass-shadow-sm:0 8px 20px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
   }
   *{box-sizing:border-box;margin:0;padding:0;}
+  /* ── ambient fluid orbs — fixed behind everything, whole-app depth cue ─── */
+  .ambient-orbs{position:fixed;inset:0;overflow:hidden;z-index:-1;pointer-events:none;}
+  .ambient-orbs .orb{position:absolute;border-radius:50%;filter:blur(70px);opacity:.32;}
+  .ambient-orbs .orb-a{width:420px;height:420px;background:var(--teal);top:-140px;left:-100px;animation:orbFloatA 16s ease-in-out infinite;}
+  .ambient-orbs .orb-b{width:380px;height:380px;background:var(--violet);bottom:-150px;right:-90px;animation:orbFloatB 19s ease-in-out infinite;}
+  .ambient-orbs .orb-c{width:260px;height:260px;background:var(--amber);top:40%;left:60%;opacity:.18;animation:orbFloatA 22s ease-in-out infinite reverse;}
+  @keyframes orbFloatA{0%,100%{transform:translate(0,0);}50%{transform:translate(40px,-30px);}}
+  @keyframes orbFloatB{0%,100%{transform:translate(0,0);}50%{transform:translate(-35px,25px);}}
+  @media(prefers-reduced-motion:reduce){.ambient-orbs .orb{animation:none;}}
+
   /* ── BACKGROUND (solid blackish-violet, no image, no fixed-attachment) ─
      Fixed background-image + 17 backdrop-filter glass panels was forcing a
      full repaint of every blurred panel on each scroll frame — that's what
@@ -460,6 +470,7 @@
 </style>
 </head>
 <body>
+<div class="ambient-orbs" aria-hidden="true"><div class="orb orb-a"></div><div class="orb orb-b"></div><div class="orb orb-c"></div></div>
 
 <header class="floating-account">
   <div class="favatar" id="pillAvatar" title="Account">—</div>
@@ -2541,7 +2552,7 @@
       </div>
       <div class="room-grid">
         <div>
-          <div class="room-pane-title">Leaderboard</div>
+          <div class="room-pane-title">Leaderboard · 3,000 HR Progress</div>
           <div class="roster" id="roster-${code}"></div>
         </div>
         <div>
