@@ -263,6 +263,7 @@
     }
     .leader-progress{padding:0;margin-top:6px;}
     .leader-progress .lp-stats{font-size:9.5px;}
+    .podium{flex-wrap:nowrap;gap:14px;}
   }
 
   /* accordion study/room log — collapsed date+total row, expand for check-in/duration/check-out + note */
@@ -2770,7 +2771,15 @@
       return { ...m, rank:i+1, dotClass, statusLabel, statusColor, activityClass, activityHtml, goalPct, pacePerDay, live };
     });
 
-    const top3 = rows.slice(0, Math.min(rows.length, 6)); // up to 6 on the podium — everyone if there's 6 or fewer
+    // Phones only ever get the classic top-3 podium — 4-6 avatars simply
+    // don't fit one row on a narrow screen without shrinking everything
+    // down to nothing, and letting it wrap to a 2nd line is what was
+    // scrambling the centred order (rank 1 landing wherever the wrap
+    // happened to break, not actually centred). 640px matches the same
+    // phone breakpoint used for the table rows above.
+    const isPhone   = window.matchMedia('(max-width:640px)').matches;
+    const podiumCap = isPhone ? 3 : 6;
+    const top3 = rows.slice(0, Math.min(rows.length, podiumCap)); // up to 6 on desktop, 3 on phone
 
     // Centre rank #1 in the row no matter how many are shown: the closest
     // ranks (2nd, 3rd) sit immediately either side of it, 4th/5th further
