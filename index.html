@@ -180,10 +180,27 @@
   .podium-slot.rank1 .p-podium-block{background:rgba(255,213,107,.08);border-color:rgba(255,213,107,.35);}
   .p-rank-num{font-size:13px;color:var(--muted-dim);}
   .leader-table{border-top:1px dashed var(--line);padding-top:16px;}
-  .leader-table-head{display:grid;grid-template-columns:56px 1fr 230px 100px 84px;font-size:10.5px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted-dim);padding:0 10px 10px;}
+  /* Column sizing: rank/hours/status stay fixed-width (their content is
+     always short and compact), but member and studying now BOTH flex to
+     share whatever space is left over — studying gets roughly double
+     member's share (2fr vs 1fr), since on a wide screen the old fixed
+     230px left it starved for room (long topics got chopped to 2-3
+     words) while member (the only flexible track before) soaked up all
+     the unused width doing nothing with it. The minmax() floors keep
+     each column from collapsing too small on narrower screens. */
+  .leader-table-head{display:grid;grid-template-columns:56px minmax(160px,1fr) minmax(260px,2fr) 100px 84px;font-size:10.5px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted-dim);padding:0 10px 10px;}
+  /* Header labels must match the text-align of the DATA cell in the same
+     column, or the label and the data it describes visually drift apart
+     (e.g. a left-aligned "Studying" label sitting above centered data).
+     nth-child order here is fixed: 1 Rank, 2 Member, 3 Studying, 4 Hours,
+     5 Status — Member is left, intentionally left unset below. */
+  .leader-table-head span:nth-child(1){text-align:center;} /* Rank   — matches .leader-serial */
+  .leader-table-head span:nth-child(3){text-align:center;} /* Studying — matches .leader-activity */
+  .leader-table-head span:nth-child(4){text-align:right;}  /* Hours  — matches .leader-hours */
+  .leader-table-head span:nth-child(5){text-align:right;}  /* Status — matches .leader-status */
   .leader-table-body{display:flex;flex-direction:column;gap:4px;}
   .leader-row{
-    display:grid;grid-template-columns:56px 1fr 230px 100px 84px;
+    display:grid;grid-template-columns:56px minmax(160px,1fr) minmax(260px,2fr) 100px 84px;
     grid-template-areas:
       "serial member activity hours status"
       "progress progress progress progress progress";
@@ -200,16 +217,20 @@
   .leader-member .m-name-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
   .leader-member .m-level{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;font-weight:500;color:var(--muted-dim);}
   /* leader-activity — the middle "timer in the room" slot: live clock + topic
-     while active/paused, otherwise a quiet already-logged summary. */
-  .leader-activity{grid-area:activity;display:flex;align-items:center;gap:7px;min-width:0;padding:0 10px;font-size:12.5px;color:var(--muted-dim);}
+     while active/paused, otherwise a quiet already-logged summary. Centered
+     (rather than the old left-icon/right-time split, which pushed la-time
+     hard against the HOURS column with no breathing room) so the whole
+     cluster sits evenly inside its column no matter which of the three
+     states (live / paused / idle) it's showing. */
+  .leader-activity{grid-area:activity;display:flex;align-items:center;justify-content:center;gap:7px;min-width:0;padding:0 10px;font-size:12.5px;color:var(--muted-dim);text-align:center;}
   .leader-activity .la-icon{flex-shrink:0;font-size:11px;}
   .leader-activity .la-topic{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
-  .leader-activity .la-time{flex-shrink:0;margin-left:auto;font-size:12px;}
+  .leader-activity .la-time{flex-shrink:0;font-size:12px;}
   .leader-activity.live{color:var(--teal);}
   .leader-activity.live .la-time{color:var(--teal);text-shadow:0 0 8px var(--teal-glow);}
   .leader-activity.paused{color:var(--amber);}
   .leader-activity.paused .la-time{color:var(--amber);}
-  .leader-activity.idle{font-style:italic;color:var(--muted-dim);}
+  .leader-activity.idle{color:var(--muted-dim);}
   .leader-hours{grid-area:hours;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);text-align:right;}
   .leader-status{grid-area:status;font-size:10.5px;text-align:right;font-weight:600;text-transform:uppercase;letter-spacing:.4px;}
 
