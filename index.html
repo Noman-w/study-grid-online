@@ -11,13 +11,31 @@
   :root{
     --bg:#0a0d10; --line:rgba(255,255,255,.14); --line-soft:rgba(255,255,255,.08);
     --text:#ffffff; --muted:#b9c4cd; --muted-dim:#8a96a1;
-    --teal:#4fe3c1; --teal-glow:rgba(79,227,193,.35);
-    --amber:#f2a93b; --amber-glow:rgba(242,169,59,.35);
-    --violet:#9b8cff; --violet-glow:rgba(155,140,255,.35);
+    --teal:#4fe3c1; --teal-rgb:79,227,193; --teal-light:#7fe9d0; --teal-glow:rgba(var(--teal-rgb),.35);
+    --amber:#f2a93b; --amber-rgb:242,169,59; --amber-glow:rgba(var(--amber-rgb),.35);
+    --violet:#9b8cff; --violet-rgb:155,140,255; --violet-glow:rgba(var(--violet-rgb),.35);
     --danger:#ff6b6b; --radius:22px; --radius-sm:14px; --radius-lg:30px;
     --panel:#14171d; --panel-2:#1a1e26;
     --glass-shadow:0 20px 50px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.08);
     --glass-shadow-sm:0 8px 20px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  /* Alternate themes — each swaps the three accent variables (+ their rgb/
+     light helpers) that everything else in this stylesheet, and the
+     avatar-wave canvas at runtime, reads through. Cycled by the header's
+     themeToggleBtn (see THEMES array in the script). Default (no
+     data-theme attribute) stays the original teal/violet/amber. */
+  :root[data-theme="nebula"]{
+    --teal:#c86dfa; --teal-rgb:200,109,250; --teal-light:#e0a6ff;
+    --violet:#ff5fa2; --violet-rgb:255,95,162;
+    --amber:#ffb648; --amber-rgb:255,182,72;
+  }
+  :root[data-theme="cryo"]{
+    --teal:#3ea6ff; --teal-rgb:62,166,255; --teal-light:#8dc9ff;
+    --violet:#22d3ee; --violet-rgb:34,211,238;
+  }
+  :root[data-theme="terminal"]{
+    --teal:#4ade80; --teal-rgb:74,222,128; --teal-light:#9df5c2;
+    --violet:#14b8a6; --violet-rgb:20,184,166;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   /* ── ambient fluid orbs — fixed behind everything, whole-app depth cue ─── */
@@ -122,7 +140,7 @@
   .roster{display:flex;flex-direction:column;gap:10px;}
   .roster-row{display:flex;align-items:center;gap:10px;padding:10px 11px;border-radius:16px;border:1px solid transparent;transition:.15s;}
   .roster-row:hover{background:var(--panel-2);}
-  .roster-row.me{border-color:rgba(79,227,193,.35);background:rgba(79,227,193,.06);}
+  .roster-row.me{border-color:rgba(var(--teal-rgb),.35);background:rgba(var(--teal-rgb),.06);}
   .rank{width:18px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted-dim);text-align:center;flex-shrink:0;}
   .rank.r1{color:#ffd56b;}.rank.r2{color:#c9d3dc;}.rank.r3{color:#e0995f;}
   .r-avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--violet),var(--teal));display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#0a0d10;flex-shrink:0;position:relative;box-shadow:0 3px 8px rgba(0,0,0,.35);}
@@ -135,7 +153,7 @@
   .you-tag{font-size:8px;color:var(--teal);border:1px solid var(--teal);border-radius:3px;padding:1px 4px;letter-spacing:.5px;}
   .r-meta{font-size:10px;color:var(--muted-dim);margin-top:2px;line-height:1.4;}
   .r-bar{height:5px;background:var(--panel-2);border-radius:999px;margin-top:5px;overflow:hidden;}
-  .r-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--teal),#7fe9d0);box-shadow:0 0 8px var(--teal-glow);}
+  .r-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--teal),var(--teal-light));box-shadow:0 0 8px var(--teal-glow);}
   .r-hours{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted);flex-shrink:0;width:74px;text-align:right;}
 
   /* room toggle balls — switch between joined rooms without stacking panels */
@@ -144,7 +162,7 @@
     display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;
     cursor:pointer;transition:.15s;position:relative;flex-shrink:0;}
   .room-ball:hover{color:var(--text);border-color:var(--muted-dim);transform:translateY(-2px);}
-  .room-ball.active{border-color:var(--teal);color:var(--teal);background:rgba(79,227,193,.14);box-shadow:0 0 16px rgba(79,227,193,.25);}
+  .room-ball.active{border-color:var(--teal);color:var(--teal);background:rgba(var(--teal-rgb),.14);box-shadow:0 0 16px rgba(var(--teal-rgb),.25);}
   .room-panel{display:none;}
   .room-panel.active-room{display:block;}
 
@@ -173,7 +191,7 @@
     align-items:center;padding:12px 10px;border-radius:14px;font-size:14px;transition:.15s;border:1px solid transparent;
   }
   .leader-row:hover{background:var(--panel-2);}
-  .leader-row.me{border-color:rgba(79,227,193,.35);background:rgba(79,227,193,.06);}
+  .leader-row.me{border-color:rgba(var(--teal-rgb),.35);background:rgba(var(--teal-rgb),.06);}
   .leader-serial{grid-area:serial;font-family:'JetBrains Mono',monospace;color:var(--muted-dim);font-size:13px;text-align:center;}
   .leader-member{grid-area:member;display:flex;align-items:center;gap:10px;min-width:0;}
   .leader-member .m-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#0a0d10;position:relative;flex-shrink:0;}
@@ -225,11 +243,11 @@
   /* visible themed scroll "slider" for the study-log lists (personal +
      room) — the default 6px grey global scrollbar blends into the dark
      panel and is easy to miss, so give these a brighter teal thumb */
-  .room-activity-list{scrollbar-width:thin;scrollbar-color:rgba(79,227,193,.55) var(--panel-2);}
+  .room-activity-list{scrollbar-width:thin;scrollbar-color:rgba(var(--teal-rgb),.55) var(--panel-2);}
   .room-activity-list::-webkit-scrollbar{width:8px;}
   .room-activity-list::-webkit-scrollbar-track{background:var(--panel-2);border-radius:4px;}
-  .room-activity-list::-webkit-scrollbar-thumb{background:rgba(79,227,193,.55);border-radius:4px;}
-  .room-activity-list::-webkit-scrollbar-thumb:hover{background:rgba(79,227,193,.8);}
+  .room-activity-list::-webkit-scrollbar-thumb{background:rgba(var(--teal-rgb),.55);border-radius:4px;}
+  .room-activity-list::-webkit-scrollbar-thumb:hover{background:rgba(var(--teal-rgb),.8);}
 
   /* ── Mobile: the fixed-px columns above (230px activity + 100px hours +
      84px status) don't fit narrow phone widths and were forcing the whole
@@ -269,8 +287,8 @@
   /* accordion study/room log — collapsed date+total row, expand for check-in/duration/check-out + note */
   .log-accordion{display:flex;flex-direction:column;gap:8px;}
   .log-item{background:var(--panel-2);border:1px solid var(--line);border-radius:16px;overflow:hidden;transition:border-color .15s;flex-shrink:0;}
-  .log-item.live-item{border-color:rgba(79,227,193,.4);background:rgba(79,227,193,.07);}
-  .log-item.saving-item{border-color:rgba(242,169,59,.35);background:rgba(242,169,59,.06);}
+  .log-item.live-item{border-color:rgba(var(--teal-rgb),.4);background:rgba(var(--teal-rgb),.07);}
+  .log-item.saving-item{border-color:rgba(var(--amber-rgb),.35);background:rgba(var(--amber-rgb),.06);}
   .log-head{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none;}
   .log-head .lh-date{font-size:12.5px;font-weight:600;flex-shrink:0;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .log-head .lh-topic{font-size:11.5px;color:var(--muted-dim);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;}
@@ -314,7 +332,7 @@
   .btn{font-family:'Inter',sans-serif;font-size:12.5px;font-weight:600;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);padding:10px 18px;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s;box-shadow:var(--glass-shadow-sm);}
   .btn:hover{border-color:var(--muted-dim);transform:translateY(-1px);}
   .btn:active{transform:translateY(1px) scale(.97);box-shadow:inset 0 3px 8px rgba(0,0,0,.4);}
-  .btn-primary{background:rgba(79,227,193,.18);color:var(--teal);border-color:rgba(79,227,193,.5);}
+  .btn-primary{background:rgba(var(--teal-rgb),.18);color:var(--teal);border-color:rgba(var(--teal-rgb),.5);}
   .btn-primary:hover{box-shadow:0 0 20px var(--teal-glow),var(--glass-shadow-sm);}
   .btn-primary:active{box-shadow:inset 0 3px 10px rgba(0,0,0,.4);}
   .btn-ghost{background:transparent;box-shadow:none;}
@@ -325,7 +343,7 @@
     color:var(--text);padding:11px 14px;font-family:'JetBrains Mono',monospace;font-size:13px;resize:vertical;transition:border-color .15s,box-shadow .15s;
   }
   input[type="text"]:focus,input[type="number"]:focus,input[type="url"]:focus,input[type="password"]:focus,textarea:focus{
-    outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(79,227,193,.15);
+    outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(var(--teal-rgb),.15);
   }
   textarea{font-family:'Inter',sans-serif;font-size:13px;min-height:64px;}
   input::placeholder,textarea::placeholder{color:var(--muted-dim);font-family:'Inter',sans-serif;}
@@ -343,11 +361,11 @@
     display:flex;align-items:center;justify-content:center;min-height:320px;padding:44px 28px;
     box-shadow:var(--glass-shadow);
   }
-  .timer-hero::before{content:'';position:absolute;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle,rgba(79,227,193,.2),transparent 70%);top:-130px;left:-90px;pointer-events:none;animation:heroFloat 13s ease-in-out infinite;}
-  .timer-hero::after{content:'';position:absolute;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(155,140,255,.18),transparent 70%);bottom:-110px;right:-70px;pointer-events:none;animation:heroFloat 16s ease-in-out infinite reverse;}
+  .timer-hero::before{content:'';position:absolute;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle,rgba(var(--teal-rgb),.2),transparent 70%);top:-130px;left:-90px;pointer-events:none;animation:heroFloat 13s ease-in-out infinite;}
+  .timer-hero::after{content:'';position:absolute;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(var(--violet-rgb),.18),transparent 70%);bottom:-110px;right:-70px;pointer-events:none;animation:heroFloat 16s ease-in-out infinite reverse;}
   @keyframes heroFloat{0%,100%{transform:translate(0,0);}50%{transform:translate(22px,-18px);}}
-  .timer-hero.running{border-color:rgba(79,227,193,.35);box-shadow:var(--glass-shadow),0 0 46px rgba(79,227,193,.12);}
-  .timer-hero.paused{border-color:rgba(242,169,59,.35);box-shadow:var(--glass-shadow),0 0 46px rgba(242,169,59,.12);}
+  .timer-hero.running{border-color:rgba(var(--teal-rgb),.35);box-shadow:var(--glass-shadow),0 0 46px rgba(var(--teal-rgb),.12);}
+  .timer-hero.paused{border-color:rgba(var(--amber-rgb),.35);box-shadow:var(--glass-shadow),0 0 46px rgba(var(--amber-rgb),.12);}
   .timer-hero-inner{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;position:relative;z-index:1;width:100%;}
   .timer-eyebrow{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted-dim);font-weight:600;}
   #timerStatusLabel.live{color:var(--teal);}
@@ -362,11 +380,11 @@
 
   .timer-face{position:relative;display:inline-block;}
   .timer-actions{display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;justify-content:center;}
-  .timer-btn-start{font-size:14px;font-weight:700;padding:14px 40px;border-radius:999px;background:rgba(79,227,193,.18);color:var(--teal);border:1px solid rgba(79,227,193,.5);cursor:pointer;letter-spacing:.5px;transition:transform .15s,box-shadow .15s;font-family:'Space Grotesk',sans-serif;box-shadow:var(--glass-shadow-sm);}
+  .timer-btn-start{font-size:14px;font-weight:700;padding:14px 40px;border-radius:999px;background:rgba(var(--teal-rgb),.18);color:var(--teal);border:1px solid rgba(var(--teal-rgb),.5);cursor:pointer;letter-spacing:.5px;transition:transform .15s,box-shadow .15s;font-family:'Space Grotesk',sans-serif;box-shadow:var(--glass-shadow-sm);}
   .timer-btn-start:hover{box-shadow:0 0 24px var(--teal-glow),var(--glass-shadow-sm);transform:translateY(-2px);}
   .timer-btn-start:active{transform:translateY(2px);box-shadow:inset 0 3px 10px rgba(0,0,0,.4);}
   .timer-btn-pause{font-size:14px;font-weight:700;padding:13px 32px;border-radius:999px;background:transparent;color:var(--amber);border:1.5px solid var(--amber);cursor:pointer;letter-spacing:.5px;transition:transform .15s,background .15s;font-family:'Space Grotesk',sans-serif;}
-  .timer-btn-pause:hover{background:rgba(242,169,59,.1);transform:translateY(-2px);}
+  .timer-btn-pause:hover{background:rgba(var(--amber-rgb),.1);transform:translateY(-2px);}
   .timer-btn-pause:active{transform:translateY(2px);}
   .timer-btn-stop{font-size:14px;font-weight:700;padding:13px 32px;border-radius:999px;background:transparent;color:var(--danger);border:1.5px solid var(--danger);cursor:pointer;letter-spacing:.5px;transition:transform .15s,background .15s;font-family:'Space Grotesk',sans-serif;}
   .timer-btn-stop:hover{background:rgba(255,107,107,.1);transform:translateY(-2px);}
@@ -381,11 +399,11 @@
 
   /* restore banner */
   .restore-banner{
-    display:none;background:rgba(79,227,193,.08);border:1px solid rgba(79,227,193,.4);
+    display:none;background:rgba(var(--teal-rgb),.08);border:1px solid rgba(var(--teal-rgb),.4);
     border-radius:999px;padding:9px 16px;font-size:12px;color:var(--teal);
     line-height:1.45;max-width:420px;text-align:center;
   }
-  .restore-banner.paused-banner{background:rgba(242,169,59,.08);border-color:rgba(242,169,59,.4);color:var(--amber);}
+  .restore-banner.paused-banner{background:rgba(var(--amber-rgb),.08);border-color:rgba(var(--amber-rgb),.4);color:var(--amber);}
 
   /* log dock */
   .log-dock{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:8px 8px 8px 18px;display:flex;align-items:center;gap:10px;box-shadow:var(--glass-shadow);z-index:40;}
@@ -405,6 +423,17 @@
   .modal-actions{display:flex;gap:8px;margin-top:6px;}
   .modal-foot-link{font-size:11px;color:var(--muted-dim);text-align:center;margin-top:14px;cursor:pointer;}
   .modal-foot-link:hover{color:var(--muted);}
+
+  /* theme picker popup */
+  .theme-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .theme-option{position:relative;background:var(--panel-2);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:14px 12px;cursor:pointer;transition:.15s;text-align:left;}
+  .theme-option:hover{border-color:var(--muted-dim);transform:translateY(-2px);}
+  .theme-option.active{border-color:var(--teal);box-shadow:0 0 0 1px var(--teal),0 0 14px var(--teal-glow);}
+  .theme-swatch{width:100%;height:32px;border-radius:9px;margin-bottom:10px;display:flex;overflow:hidden;border:1px solid var(--line);}
+  .theme-swatch span{flex:1;}
+  .theme-option-label{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12.5px;}
+  .theme-option-check{position:absolute;top:9px;right:9px;width:16px;height:16px;border-radius:50%;background:var(--teal);color:#0a0d10;font-size:10px;font-weight:700;display:none;align-items:center;justify-content:center;}
+  .theme-option.active .theme-option-check{display:flex;}
   .tabs{display:flex;gap:4px;background:var(--panel-2);border-radius:999px;padding:4px;margin-bottom:16px;}
   .tab{flex:1;text-align:center;font-size:11px;padding:8px;border-radius:999px;cursor:pointer;color:var(--muted);font-weight:600;transition:.15s;}
   .tab.active{background:var(--panel);color:var(--text);box-shadow:var(--glass-shadow-sm);}
@@ -483,12 +512,23 @@
   .popup-tab-content[data-tab-content="resources"] .resources-list{flex:1;overflow-y:auto;padding:0 14px 14px;}
   @media(max-width:480px){.chat-popup{right:10px;left:10px;width:auto;bottom:84px;}.chat-fab{right:14px;bottom:14px;}}
 </style>
+<script>
+  // Applied as early as possible (before body renders) so a returning
+  // visitor doesn't see a flash of the default theme first. The toggle
+  // button later in <body> just cycles this same attribute + localStorage
+  // key through the THEMES list.
+  try{
+    var savedTheme = localStorage.getItem('studygrid-theme');
+    if(savedTheme && savedTheme !== 'default') document.documentElement.setAttribute('data-theme', savedTheme);
+  }catch(e){}
+</script>
 </head>
 <body>
 <div class="ambient-orbs" aria-hidden="true"><div class="orb orb-a"></div><div class="orb orb-b"></div><div class="orb orb-c"></div></div>
 
 <header class="floating-account">
   <div class="favatar" id="pillAvatar" title="Account">—</div>
+  <button class="icon-btn" id="themeToggleBtn" title="Switch theme">◐</button>
   <button class="icon-btn" id="settingsBtn" title="Settings">⚙</button>
   <button class="icon-btn" id="logoutBtn" title="Log out">⏏</button>
 </header>
@@ -750,6 +790,17 @@
     <div class="resources-list" id="levelsModalList" style="max-height:50vh;margin-bottom:14px;"></div>
     <div class="modal-actions">
       <button class="btn btn-block" id="levelsCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="themeModal">
+  <div class="modal">
+    <div class="modal-title">Choose a theme</div>
+    <div class="modal-desc">Pick an accent palette — your choice is saved automatically and remembered next time.</div>
+    <div class="theme-grid" id="themeGrid"></div>
+    <div class="modal-actions" style="margin-top:14px;">
+      <button class="btn btn-block" id="themeModalClose">Close</button>
     </div>
   </div>
 </div>
@@ -2909,6 +2960,21 @@
   const waveCanvases = new Map();  // canvas element -> live draw info (LIVE members only)
   let   waveLoopRunning = false;
 
+  // Cached read of the active theme's --violet/--teal so the canvas fill
+  // (which can't use CSS var() directly) still follows theme toggles.
+  // Read once on load and again whenever the theme changes — not on every
+  // animation frame, since getComputedStyle is comparatively expensive.
+  const themeAccent = { violet:'#9b8cff', teal:'#4fe3c1' };
+  function refreshThemeAccentColors(){
+    const cs = getComputedStyle(document.documentElement);
+    themeAccent.violet = (cs.getPropertyValue('--violet')||'#9b8cff').trim();
+    themeAccent.teal   = (cs.getPropertyValue('--teal')||'#4fe3c1').trim();
+    // Re-mount every avatar canvas currently in the DOM so both live
+    // (animating) and flat/paused avatars redraw immediately with the new
+    // theme colors instead of waiting for their next natural re-render.
+    mountAvatarWaves(document);
+  }
+
   /* ── TUNING ──────────────────────────────────────────────────────────
    * Every knob for the wave's look/motion lives in the object below. Each
    * member gets one random value inside the given range, picked once and
@@ -3053,7 +3119,8 @@
     ctx.closePath();
 
     // Filled with the exact same violet→teal 135° gradient the avatar's
-    // CSS background always used (--violet #9b8cff → --teal #4fe3c1) — this
+    // CSS background always used (--violet → --teal, read live off the
+    // active theme via themeAccent, since canvas can't use var())  — this
     // canvas shape now IS the avatar, not a ring floating around one.
     // Ranks 1-3 are the exception: instead of that violet→teal fill, each
     // gets its own rich metallic gradient (bright highlight → deep base
@@ -3071,8 +3138,8 @@
       grad.addColorStop(0.5, medal.fill[1]);
       grad.addColorStop(1,   medal.fill[2]);
     }else{
-      grad.addColorStop(0, '#9b8cff');
-      grad.addColorStop(1, '#4fe3c1');
+      grad.addColorStop(0, themeAccent.violet);
+      grad.addColorStop(1, themeAccent.teal);
     }
 
     if(medal){
@@ -3391,6 +3458,97 @@
     if(window.unsubscribeAllRooms) window.unsubscribeAllRooms();
   }
 
+  /* ── THEME PICKER ──────────────────────────────────────────────────────────
+     Tapping themeToggleBtn opens a popup (#themeModal) listing every theme
+     defined in the CSS ([data-theme="..."] blocks near the top of <style>).
+     The <html data-theme> attribute is what every CSS rule and the avatar
+     canvas actually read; picking an option in the popup sets it, saves the
+     choice to localStorage so it's remembered on the next visit, and
+     re-syncs the button icon, canvases, and a confirmation toast.
+
+     First-run behavior: if this browser has never saved a theme choice
+     (localStorage has no 'studygrid-theme' key at all), the popup opens
+     automatically once — no tap required — via maybeShowThemeOnboarding(),
+     called from boot() and from onboardSubmit() below. Once any choice is
+     saved (or the popup is dismissed via Close, which counts as "seen"),
+     the key exists and the popup never opens itself again — from then on
+     it only opens when themeToggleBtn is tapped. Add a new theme by adding
+     one CSS block + one THEMES/THEME_COLORS entry here — nothing else
+     needs to change. */
+  const THEMES = [
+    { key:'default',  label:'Teal / violet',    icon:'◐' },
+    { key:'nebula',   label:'Nebula magenta',   icon:'✦' },
+    { key:'cryo',     label:'Cryo focus',       icon:'❄' },
+    { key:'terminal', label:'Terminal green',   icon:'❯' }
+  ];
+  // Hex swatches per theme, mirroring the :root[data-theme="..."] CSS
+  // blocks above — kept here (rather than read live via getComputedStyle)
+  // so the popup can preview every theme's palette without having to
+  // flip data-theme on and off just to sample colors.
+  const THEME_COLORS = {
+    default:  { teal:'#4fe3c1', violet:'#9b8cff', amber:'#f2a93b' },
+    nebula:   { teal:'#c86dfa', violet:'#ff5fa2', amber:'#ffb648' },
+    cryo:     { teal:'#3ea6ff', violet:'#22d3ee', amber:'#f2a93b' },
+    terminal: { teal:'#4ade80', violet:'#14b8a6', amber:'#f2a93b' }
+  };
+  function currentThemeIndex(){
+    const cur = document.documentElement.getAttribute('data-theme') || 'default';
+    const idx = THEMES.findIndex(t=>t.key===cur);
+    return idx===-1 ? 0 : idx;
+  }
+  function updateThemeToggleIcon(){
+    const btn = document.getElementById('themeToggleBtn');
+    if(!btn) return;
+    const t = THEMES[currentThemeIndex()];
+    btn.textContent = t.icon;
+    btn.title = 'Theme: '+t.label+' — tap to switch';
+  }
+  // Applies + persists a theme choice. Used by the popup below and by
+  // maybeShowThemeOnboarding()'s auto-first-run path.
+  function applyTheme(key){
+    if(key==='default') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', key);
+    try{ localStorage.setItem('studygrid-theme', key); }catch(e){}
+    refreshThemeAccentColors();
+    updateThemeToggleIcon();
+  }
+  // Builds the popup's option grid fresh each time it opens, so the
+  // active-theme highlight always reflects the current selection.
+  function renderThemeModal(){
+    const grid = document.getElementById('themeGrid');
+    if(!grid) return;
+    const curKey = THEMES[currentThemeIndex()].key;
+    grid.innerHTML = THEMES.map(t=>{
+      const c = THEME_COLORS[t.key];
+      return '<div class="theme-option'+(t.key===curKey?' active':'')+'" data-theme-key="'+t.key+'">'
+           +   '<div class="theme-option-check">\u2713</div>'
+           +   '<div class="theme-swatch"><span style="background:'+c.teal+'"></span><span style="background:'+c.violet+'"></span><span style="background:'+c.amber+'"></span></div>'
+           +   '<div class="theme-option-label">'+t.label+'</div>'
+           + '</div>';
+    }).join('');
+    grid.querySelectorAll('.theme-option').forEach(opt=>{
+      opt.onclick = ()=>{
+        const key = opt.getAttribute('data-theme-key');
+        applyTheme(key);
+        closeModal('themeModal');
+        showToast('Theme saved', THEMES.find(t=>t.key===key).label);
+      };
+    });
+  }
+  // First-run only: auto-opens the theme popup once per browser, before any
+  // preference has ever been saved. Called from boot() (returning visitors
+  // who skip the login modal) and from onboardSubmit() (fresh signups/logins,
+  // right after that modal closes) so it never stacks on top of it. Safe to
+  // call from both places — after the first save/dismissal the localStorage
+  // key exists and every later call is a no-op.
+  function maybeShowThemeOnboarding(){
+    let seen;
+    try{ seen = localStorage.getItem('studygrid-theme'); }catch(e){ seen = 'default'; }
+    if(seen!==null) return;
+    renderThemeModal();
+    openModal('themeModal');
+  }
+
   /* ── WIRE EVENTS ────────────────────────────────────────────────────────── */
   function wireEvents(){
     /* floating chat popup */
@@ -3406,6 +3564,23 @@
 
     /* No log modal, no Save button to wire up — stopTimerAndLog() now saves
      * the session itself, immediately, via finalizeAndSaveSession(). */
+
+    /* theme picker button — the theme system itself (THEMES, applyTheme,
+     * renderThemeModal, maybeShowThemeOnboarding) lives at module scope
+     * above this function so it's reachable from boot()/onboardSubmit(). */
+    document.getElementById('themeToggleBtn').onclick = ()=>{
+      renderThemeModal();
+      openModal('themeModal');
+    };
+    document.getElementById('themeModalClose').onclick = ()=>{
+      // First-run auto popup: closing without picking still counts as
+      // "seen" so it won't reopen itself on the next visit — same effect
+      // as tapping a theme (keeps the current/default palette).
+      try{ if(localStorage.getItem('studygrid-theme')===null) applyTheme('default'); }catch(e){}
+      closeModal('themeModal');
+    };
+    refreshThemeAccentColors();
+    updateThemeToggleIcon();
 
     /* settings */
     document.getElementById('settingsBtn').onclick = ()=>{
@@ -3563,6 +3738,7 @@
       saveProfile();
       await flushProfileSave();
       closeModal('onboardModal');
+      maybeShowThemeOnboarding(); // one-time auto popup for first-time visitors
       await window.getServerNow(); // prime clock offset before any elapsed-time math runs
       const hadTimer = await loadPersistedTimer();
       if(hadTimer){ restoreTimerUI(); } else { applyTimerUI(); await recoverPendingLogIfAny(); }
@@ -3577,7 +3753,12 @@
   async function boot(){
     wireEvents();
     await loadProfile();
+    const skippedOnboardModal = !!(state.id && state.name); // mirrors maybeOnboard()'s own check
     await maybeOnboard();
+    // Returning visitors never see #onboardModal, so this is the only place
+    // their one-time theme popup gets triggered (fresh signups/logins get
+    // theirs from onboardSubmit() instead, right after that modal closes).
+    if(skippedOnboardModal) maybeShowThemeOnboarding();
 
     // Verify Notification Engine Permissions on App Bootup
     if('Notification' in window && Notification.permission === 'default'){
