@@ -1115,6 +1115,9 @@
     totalHours:0, totalXP:0,
     dailyLog:{}, sessionHistory:[],
     rooms:[], // [{code, name}] — multi-room support
+    theme:'default', // this user's chosen palette — synced so OTHER viewers
+                      // render this member's avatar in it, independent of
+                      // whatever theme the viewer has picked for themselves
   };
 
   /* ── timer record ───────────────────────────────────────────────────────────
@@ -2346,6 +2349,7 @@
         todayHours    : state.dailyLog[today]||0,
         daysActive    : Math.max(1, Object.keys(state.dailyLog).length),
         dailyGoalHours: state.dailyGoalHours,
+        theme         : state.theme || 'default', // this member's own chosen palette
         timerRecord   : { ...timerRecord, written_at: new Date().toISOString() },
         recentLog     : (state.sessionHistory||[]).filter(s=>!s.isLive).slice(0,5)
                           .map(s=>({ ts:s.ts, hours:s.hours, note:(s.note||'').slice(0,200), started_at:s.started_at||null })),
@@ -2864,7 +2868,7 @@
         const crown = m.rank===1 ? '<span class="p-crown">♛</span>' : '';
         return `
           <div class="podium-slot ${rc}">
-            <div class="avatar-wave" data-member-id="${m.id}" data-live="${m.live?1:0}" data-tier="${m.rank<=3?m.rank:0}">
+            <div class="avatar-wave" data-member-id="${m.id}" data-member-theme="${m.theme||'default'}" data-live="${m.live?1:0}" data-tier="${m.rank<=3?m.rank:0}">
               <canvas class="wave-canvas"></canvas>
               <div class="p-avatar">${crown}<span class="avatar-letters">${initials(m.name)}</span><span class="status-dot ${m.dotClass}"></span></div>
             </div>
@@ -2879,7 +2883,7 @@
       <div class="leader-row${m.id===state.id?' me':''}">
         <div class="leader-serial">${m.rank}</div>
         <div class="leader-member">
-          <div class="avatar-wave" data-member-id="${m.id}" data-live="${m.live?1:0}" data-tier="0">
+          <div class="avatar-wave" data-member-id="${m.id}" data-member-theme="${m.theme||'default'}" data-live="${m.live?1:0}" data-tier="0">
             <canvas class="wave-canvas"></canvas>
             <div class="m-avatar"><span class="avatar-letters">${initials(m.name)}</span></div>
           </div>
@@ -2960,18 +2964,15 @@
   const waveCanvases = new Map();  // canvas element -> live draw info (LIVE members only)
   let   waveLoopRunning = false;
 
-  // Cached read of the active theme's --violet/--teal so the canvas fill
-  // (which can't use CSS var() directly) still follows theme toggles.
-  // Read once on load and again whenever the theme changes — not on every
-  // animation frame, since getComputedStyle is comparatively expensive.
-  const themeAccent = { violet:'#9b8cff', teal:'#4fe3c1' };
+  // NOTE: avatar canvases no longer read the viewer's local --violet/--teal
+  // CSS vars — each avatar now fills with its OWN member's synced theme
+  // (see data-member-theme / themeColorsFor below), so a viewer switching
+  // their own theme never recolors anyone else's avatar. This function's
+  // only remaining job is to force an immediate redraw of avatar canvases
+  // already on screen right after the viewer changes their OWN theme, so
+  // their own avatar-wave (podium/leaderboard/self-row) updates instantly
+  // instead of waiting for the next natural re-render.
   function refreshThemeAccentColors(){
-    const cs = getComputedStyle(document.documentElement);
-    themeAccent.violet = (cs.getPropertyValue('--violet')||'#9b8cff').trim();
-    themeAccent.teal   = (cs.getPropertyValue('--teal')||'#4fe3c1').trim();
-    // Re-mount every avatar canvas currently in the DOM so both live
-    // (animating) and flat/paused avatars redraw immediately with the new
-    // theme colors instead of waiting for their next natural re-render.
     mountAvatarWaves(document);
   }
 
@@ -3023,6 +3024,7 @@
       const id       = wrap.dataset.memberId;
       const live     = wrap.dataset.live === '1';
       const tier     = parseInt(wrap.dataset.tier, 10) || 0; // 1=gold 2=silver 3=bronze 0=none
+      const themeKey = wrap.dataset.memberTheme || 'default'; // that MEMBER's own theme, not the viewer's
       const canvas   = wrap.querySelector('canvas.wave-canvas');
       const avatarEl = wrap.querySelector('.p-avatar, .m-avatar');
       if(!id || !canvas || !avatarEl) return;
@@ -3040,7 +3042,7 @@
       const ctx = canvas.getContext('2d');
       ctx.setTransform(dpr,0,0,dpr,0,0);
 
-      const info = { ctx, size:canvasSize, avatarSize:size, memberId:id, tier };
+      const info = { ctx, size:canvasSize, avatarSize:size, memberId:id, tier, themeKey };
       if(live){
         waveCanvases.set(canvas, info);
       }else{
@@ -3090,7 +3092,7 @@
   };
 
   function drawAvatarWave(info, t, live){
-    const { ctx, size, avatarSize, memberId, tier } = info;
+    const { ctx, size, avatarSize, memberId, tier, themeKey } = info;
     const seed = getWaveSeed(memberId);
 
     const cx = size/2, cy = size/2;
@@ -3118,10 +3120,12 @@
     }
     ctx.closePath();
 
-    // Filled with the exact same violet→teal 135° gradient the avatar's
-    // CSS background always used (--violet → --teal, read live off the
-    // active theme via themeAccent, since canvas can't use var())  — this
-    // canvas shape now IS the avatar, not a ring floating around one.
+    // Filled with a violet→teal 135°-equivalent gradient — but critically,
+    // using THIS MEMBER's own chosen theme (info.themeKey, synced from
+    // their profile — see THEME_COLORS/themeColorsFor below), not the
+    // viewer's local theme. That's what makes a member's avatar color
+    // stay theirs no matter what palette the person looking at it has
+    // picked for their own browser.
     // Ranks 1-3 are the exception: instead of that violet→teal fill, each
     // gets its own rich metallic gradient (bright highlight → deep base
     // tone, echoing the outline below) so the podium reads as actual
@@ -3138,8 +3142,9 @@
       grad.addColorStop(0.5, medal.fill[1]);
       grad.addColorStop(1,   medal.fill[2]);
     }else{
-      grad.addColorStop(0, themeAccent.violet);
-      grad.addColorStop(1, themeAccent.teal);
+      const ownerColors = themeColorsFor(themeKey);
+      grad.addColorStop(0, ownerColors.violet);
+      grad.addColorStop(1, ownerColors.teal);
     }
 
     if(medal){
@@ -3180,11 +3185,14 @@
   function renderPopupCollab(rows){
     const el = document.getElementById('chatPopupCollab');
     if(!el) return;
-    el.innerHTML = (rows||[]).map(m=>`
+    el.innerHTML = (rows||[]).map(m=>{
+      const c = themeColorsFor(m.theme);
+      return `
       <div class="collab-chip" title="${escapeHtml(m.name)} — ${m.statusLabel}">
-        <div class="c-avatar">${initials(m.name)}<span class="status-dot ${m.dotClass}"></span></div>
+        <div class="c-avatar" style="background:linear-gradient(135deg,${c.violet},${c.teal});">${initials(m.name)}<span class="status-dot ${m.dotClass}"></span></div>
         <div class="c-name">${escapeHtml((m.name||'').split(/\s+/)[0]||m.name)}</div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
   async function renderRoomPanel(code, realtimeData){
@@ -3491,6 +3499,14 @@
     cryo:     { teal:'#3ea6ff', violet:'#22d3ee', amber:'#f2a93b' },
     terminal: { teal:'#4ade80', violet:'#14b8a6', amber:'#f2a93b' }
   };
+  // Looks up any member's own palette by their theme key (falls back to
+  // default for unknown/missing keys, e.g. a peer on an older app version
+  // that never synced a theme). Used wherever we render a SPECIFIC
+  // person's avatar (podium/leaderboard canvas, chat collaborator chips)
+  // so it reflects THEIR choice, not the local viewer's.
+  function themeColorsFor(key){
+    return THEME_COLORS[key] || THEME_COLORS.default;
+  }
   function currentThemeIndex(){
     const cur = document.documentElement.getAttribute('data-theme') || 'default';
     const idx = THEMES.findIndex(t=>t.key===cur);
@@ -3503,6 +3519,18 @@
     btn.textContent = t.icon;
     btn.title = 'Theme: '+t.label+' — tap to switch';
   }
+  // Keeps state.theme aligned with THIS browser's actual applied theme
+  // (localStorage 'studygrid-theme', or 'default' if none saved yet) —
+  // called after profile load and during onboarding so the value pushed
+  // to peers always matches what this device is really showing, even
+  // before the user has touched the theme popup this session, and even
+  // if a cloud profile fetched from a different device carried an older
+  // theme choice.
+  function syncStateThemeFromLocalStorage(){
+    let saved = null;
+    try{ saved = localStorage.getItem('studygrid-theme'); }catch(e){}
+    state.theme = saved || 'default';
+  }
   // Applies + persists a theme choice. Used by the popup below and by
   // maybeShowThemeOnboarding()'s auto-first-run path.
   function applyTheme(key){
@@ -3511,6 +3539,25 @@
     try{ localStorage.setItem('studygrid-theme', key); }catch(e){}
     refreshThemeAccentColors();
     updateThemeToggleIcon();
+
+    // Beyond the purely local/visual bits above: this theme is also part
+    // of this user's synced profile (state.theme), so that OTHER viewers
+    // can render THIS person's avatar in it regardless of what theme
+    // those viewers have picked for themselves. Save it to the profile
+    // and, if the user is in any rooms, push it into those room blobs
+    // right away rather than waiting for an unrelated sync.
+    if(state.id){
+      state.theme = key;
+      saveProfile(); // debounced cloud/local profile save
+      // Instantly recolor this user's own avatar-wave(s) already on screen
+      // (podium/leaderboard/self-row) without waiting on the network —
+      // the syncGroupSelf() call below will confirm it to room-mates.
+      document.querySelectorAll('.avatar-wave[data-member-id="'+state.id+'"]').forEach(el=>{
+        el.dataset.memberTheme = key;
+      });
+      mountAvatarWaves(document);
+      if(state.rooms && state.rooms.length) syncGroupSelf().catch(()=>{});
+    }
   }
   // Builds the popup's option grid fresh each time it opens, so the
   // active-theme highlight always reflects the current selection.
@@ -3735,6 +3782,7 @@
         state.dailyGoalHours = goal;
         state.rooms          = [];
       }
+      syncStateThemeFromLocalStorage();
       saveProfile();
       await flushProfileSave();
       closeModal('onboardModal');
@@ -3753,6 +3801,7 @@
   async function boot(){
     wireEvents();
     await loadProfile();
+    syncStateThemeFromLocalStorage();
     const skippedOnboardModal = !!(state.id && state.name); // mirrors maybeOnboard()'s own check
     await maybeOnboard();
     // Returning visitors never see #onboardModal, so this is the only place
