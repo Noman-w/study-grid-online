@@ -3033,13 +3033,23 @@
     // Filled with the exact same violet→teal 135° gradient the avatar's
     // CSS background always used (--violet #9b8cff → --teal #4fe3c1) — this
     // canvas shape now IS the avatar, not a ring floating around one.
+    // Rank-1 is the one exception: instead of that violet→teal fill, it
+    // gets a warm gold-to-amber gradient of its own (bright highlight →
+    // deep amber, echoing the outline below) so the #1 spot reads as gold
+    // all the way through, not just a gold ring around a cyan-ish disc.
     const gradSpan = baseRadius + maxAmplitude;
     const grad = ctx.createLinearGradient(
       cx - gradSpan*Math.cos(Math.PI/4), cy - gradSpan*Math.sin(Math.PI/4),
       cx + gradSpan*Math.cos(Math.PI/4), cy + gradSpan*Math.sin(Math.PI/4)
     );
-    grad.addColorStop(0, '#9b8cff');
-    grad.addColorStop(1, '#4fe3c1');
+    if(gold){
+      grad.addColorStop(0,   '#fff3c4');
+      grad.addColorStop(0.5, '#ffd56b');
+      grad.addColorStop(1,   '#d98f00');
+    }else{
+      grad.addColorStop(0, '#9b8cff');
+      grad.addColorStop(1, '#4fe3c1');
+    }
 
     if(gold){
       // Soft gold glow behind the fill (replaces the old fixed
