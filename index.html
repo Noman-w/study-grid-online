@@ -2813,7 +2813,7 @@
         const crown = m.rank===1 ? '<span class="p-crown">♛</span>' : '';
         return `
           <div class="podium-slot ${rc}">
-            <div class="avatar-wave" data-member-id="${m.id}" data-live="${m.live?1:0}" data-gold="${m.rank===1?1:0}">
+            <div class="avatar-wave" data-member-id="${m.id}" data-live="${m.live?1:0}" data-tier="${m.rank<=3?m.rank:0}">
               <canvas class="wave-canvas"></canvas>
               <div class="p-avatar">${crown}<span class="avatar-letters">${initials(m.name)}</span><span class="status-dot ${m.dotClass}"></span></div>
             </div>
@@ -2828,7 +2828,7 @@
       <div class="leader-row${m.id===state.id?' me':''}">
         <div class="leader-serial">${m.rank}</div>
         <div class="leader-member">
-          <div class="avatar-wave" data-member-id="${m.id}" data-live="${m.live?1:0}" data-gold="0">
+          <div class="avatar-wave" data-member-id="${m.id}" data-live="${m.live?1:0}" data-tier="0">
             <canvas class="wave-canvas"></canvas>
             <div class="m-avatar"><span class="avatar-letters">${initials(m.name)}</span></div>
           </div>
@@ -2956,7 +2956,7 @@
     container.querySelectorAll('.avatar-wave').forEach(wrap=>{
       const id       = wrap.dataset.memberId;
       const live     = wrap.dataset.live === '1';
-      const gold     = wrap.dataset.gold === '1';
+      const tier     = parseInt(wrap.dataset.tier, 10) || 0; // 1=gold 2=silver 3=bronze 0=none
       const canvas   = wrap.querySelector('canvas.wave-canvas');
       const avatarEl = wrap.querySelector('.p-avatar, .m-avatar');
       if(!id || !canvas || !avatarEl) return;
@@ -2974,7 +2974,7 @@
       const ctx = canvas.getContext('2d');
       ctx.setTransform(dpr,0,0,dpr,0,0);
 
-      const info = { ctx, size:canvasSize, avatarSize:size, memberId:id, gold };
+      const info = { ctx, size:canvasSize, avatarSize:size, memberId:id, tier };
       if(live){
         waveCanvases.set(canvas, info);
       }else{
@@ -3001,8 +3001,30 @@
     requestAnimationFrame(waveLoop);
   }
 
+  // Rank 1-3 podium avatars get a rich metallic fill instead of the usual
+  // violet→teal gradient — each with its own bright highlight → deep base
+  // color stop (so it reads as an actual metal, not a flat tint) plus a
+  // matching two-tone outline and soft glow, drawn in drawAvatarWave below.
+  const MEDAL_STYLES = {
+    1: { // gold
+      fill:   ['#fff3c4', '#ffd56b', '#d98f00'],
+      stroke: ['#fff0b3', '#ffb300', '#c98a00'],
+      glow:   'rgba(255,176,0,.65)'
+    },
+    2: { // silver
+      fill:   ['#f8fbfd', '#c9d3dc', '#828d99'],
+      stroke: ['#ffffff', '#b6c1cc', '#57626d'],
+      glow:   'rgba(200,213,224,.55)'
+    },
+    3: { // bronze
+      fill:   ['#ffdbac', '#cd7f32', '#763f14'],
+      stroke: ['#ffe7c2', '#b56a24', '#54300d'],
+      glow:   'rgba(205,127,50,.55)'
+    }
+  };
+
   function drawAvatarWave(info, t, live){
-    const { ctx, size, avatarSize, memberId, gold } = info;
+    const { ctx, size, avatarSize, memberId, tier } = info;
     const seed = getWaveSeed(memberId);
 
     const cx = size/2, cy = size/2;
@@ -3033,49 +3055,51 @@
     // Filled with the exact same violet→teal 135° gradient the avatar's
     // CSS background always used (--violet #9b8cff → --teal #4fe3c1) — this
     // canvas shape now IS the avatar, not a ring floating around one.
-    // Rank-1 is the one exception: instead of that violet→teal fill, it
-    // gets a warm gold-to-amber gradient of its own (bright highlight →
-    // deep amber, echoing the outline below) so the #1 spot reads as gold
-    // all the way through, not just a gold ring around a cyan-ish disc.
+    // Ranks 1-3 are the exception: instead of that violet→teal fill, each
+    // gets its own rich metallic gradient (bright highlight → deep base
+    // tone, echoing the outline below) so the podium reads as actual
+    // gold/silver/bronze all the way through, not just a tinted ring
+    // around a cyan-ish disc.
+    const medal = MEDAL_STYLES[tier];
     const gradSpan = baseRadius + maxAmplitude;
     const grad = ctx.createLinearGradient(
       cx - gradSpan*Math.cos(Math.PI/4), cy - gradSpan*Math.sin(Math.PI/4),
       cx + gradSpan*Math.cos(Math.PI/4), cy + gradSpan*Math.sin(Math.PI/4)
     );
-    if(gold){
-      grad.addColorStop(0,   '#fff3c4');
-      grad.addColorStop(0.5, '#ffd56b');
-      grad.addColorStop(1,   '#d98f00');
+    if(medal){
+      grad.addColorStop(0,   medal.fill[0]);
+      grad.addColorStop(0.5, medal.fill[1]);
+      grad.addColorStop(1,   medal.fill[2]);
     }else{
       grad.addColorStop(0, '#9b8cff');
       grad.addColorStop(1, '#4fe3c1');
     }
 
-    if(gold){
-      // Soft gold glow behind the fill (replaces the old fixed
+    if(medal){
+      // Soft metallic glow behind the fill (replaces the old fixed
       // box-shadow:0 0 28px rgba(255,213,107,.45) on the flat circle) —
       // shadowBlur follows the fill's actual silhouette, so it hugs the
-      // wave when rippling instead of a static circular halo. Richer,
-      // more saturated amber-gold than the original pale rgba(255,213,107).
+      // wave when rippling instead of a static circular halo. Each tier
+      // gets its own glow tint (warm gold / cool silver / warm copper).
       ctx.save();
-      ctx.shadowColor = 'rgba(255,176,0,.65)';
+      ctx.shadowColor = medal.glow;
       ctx.shadowBlur  = size*0.10;
       ctx.fillStyle = grad;
       ctx.fill();
       ctx.restore();
-      // Crisp gold outline traced on the same path (replaces the old
+      // Crisp metallic outline traced on the same path (replaces the old
       // border:2px solid #ffd56b) — thinner than before, and a two-tone
-      // metallic gradient (bright highlight → deep amber) instead of one
-      // flat pale hex, so it reads as rich gold rather than pale yellow.
-      // Drawn without shadow so the line itself stays sharp; the glow
-      // above already provides the soft halo around it.
+      // gradient (bright highlight → deep base) instead of one flat hex,
+      // so it reads as rich metal rather than a pale tint. Drawn without
+      // shadow so the line itself stays sharp; the glow above already
+      // provides the soft halo around it.
       const strokeGrad = ctx.createLinearGradient(
         cx - gradSpan*Math.cos(Math.PI/4), cy - gradSpan*Math.sin(Math.PI/4),
         cx + gradSpan*Math.cos(Math.PI/4), cy + gradSpan*Math.sin(Math.PI/4)
       );
-      strokeGrad.addColorStop(0,   '#fff0b3');
-      strokeGrad.addColorStop(0.5, '#ffb300');
-      strokeGrad.addColorStop(1,   '#c98a00');
+      strokeGrad.addColorStop(0,   medal.stroke[0]);
+      strokeGrad.addColorStop(0.5, medal.stroke[1]);
+      strokeGrad.addColorStop(1,   medal.stroke[2]);
       ctx.lineWidth = Math.max(1.4, size*0.012);
       ctx.strokeStyle = strokeGrad;
       ctx.stroke();
