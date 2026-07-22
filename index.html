@@ -1312,6 +1312,70 @@
   }
   async function flushPersistTimer(){ return await persistTimer(); }
 
+  /** Global flag mirroring window.lastServerSyncOK, but for the timer
+   * RECORD read specifically (not the server clock). Set by every call to
+   * fetchTimerRecordFromServer() below — TRUE only when the server was
+   * actually reached, FALSE when it could not be confirmed after retries.
+   * Callers that need to know "is a session already running anywhere?"
+   * (loadPersistedTimer at boot, startTimer's guard) check this instead of
+   * silently trusting a stale in-memory default. */
+  window.lastTimerSyncOK = false;
+
+  /** Dedicated, retrying, failure-aware read of this user's persisted timer
+   * record — used by both loadPersistedTimer() (boot restore) and
+   * refreshTimerFromServer() (the anti-clobber check before every
+   * Start/Pause/Resume/Stop).
+   *
+   * THE BUG THIS FIXES: both of the above used to go through the generic
+   * window.storage.get()/sbGet() path, one attempt, no retry. That path
+   * collapses two very different outcomes into the exact same `null`
+   * return: "confirmed — no row exists" and "the fetch itself failed
+   * (timeout/network)." There was no way for a caller to tell them apart.
+   *
+   * Concretely, that meant: reopen the app after leaving a session running
+   * → boot's loadPersistedTimer() does one fetch → if that single attempt
+   * hits a network blip (very ordinary right as a mobile page loads), it's
+   * silently treated as "no timer" → the UI shows a fresh, ready-to-start
+   * screen instead of the real running one, no error shown anywhere. If
+   * the user then presses Start, startTimer()'s own "is one already
+   * running?" check calls refreshTimerFromServer() — ALSO one attempt, no
+   * retry — and if THAT also fails to reach the server, it silently kept
+   * whatever was already in the in-memory `timerRecord`, which defaults to
+   * 'idle' on a fresh page load. The guard then saw a false 'idle', didn't
+   * block, and persistTimer() blindly overwrote the server's real active
+   * record with a brand new one — permanently destroying the original
+   * started_at/accumulated_seconds. No ledger row was ever created for
+   * that time, because it was never actually "stopped" — it just silently
+   * ceased to exist. That is a session vanishing with the user never
+   * having touched Stop or Save, which is exactly what was reported.
+   *
+   * THE FIX: retry (matching the pattern already used for getServerNow),
+   * and return an explicit {ok, row} pair so "confirmed, here's the row
+   * (possibly null = genuinely no timer)" is never confused with "still
+   * couldn't tell after retries." Callers now refuse to act on the latter
+   * instead of quietly treating it as the former. */
+  async function fetchTimerRecordFromServer(){
+    if(!sb || !state.id){ window.lastTimerSyncOK = false; return { ok:false, row:null }; }
+    for(let attempt=0; attempt<3; attempt++){
+      if(attempt>0) await new Promise(r=>setTimeout(r, 1000*attempt));
+      try{
+        const { data, error } = await withTimeout(
+          sb.from('studygrid_kv').select('value').eq('key', timerCloudKey()).maybeSingle(),
+          SB_TIMEOUT_MS, 'fetchTimerRecordFromServer'
+        );
+        if(!error){
+          window.lastTimerSyncOK = true;
+          return { ok:true, row: data ? data.value : null };
+        }
+        console.warn('STUDYGRID: fetchTimerRecordFromServer error, attempt', attempt, error);
+      }catch(e){
+        console.warn('STUDYGRID: fetchTimerRecordFromServer threw/timed out, attempt', attempt, e);
+      }
+    }
+    window.lastTimerSyncOK = false;
+    return { ok:false, row:null };
+  }
+
   /* ── PENDING LOG (durability net around the save itself) ───────────────────
    * WHEN IS THIS CREATED? Only at STOP — never at Start. While a session is
    * actively running, there's nothing to "draft": the already-durable
@@ -1633,32 +1697,39 @@
    */
   async function loadPersistedTimer(){
     if(!state.id) return false;
-    try{
-      const r = await window.storage.get(timerCloudKey(), true);
-      if(r && r.value){
-        const saved = JSON.parse(r.value);
-        if(saved && (saved.status==='active'||saved.status==='paused')){
-          // Staleness check: a paused record with no written_at timestamp is
-          // untrustworthy (pre-fix legacy data). Reject it to avoid ghost-online.
-          const writtenAt = saved.written_at ? new Date(saved.written_at).getTime() : 0;
-          const ageMs = Date.now() - writtenAt;
-          // If the timer says active but started_at is missing → corrupt, discard.
-          if(saved.status === 'active' && !saved.started_at){
-            console.warn('STUDYGRID: discarding corrupt active timer (no started_at)');
-            await persistTimer(); // write idle
-            return false;
-          }
-          // If data is older than 24 h and has no valid started_at anchor → discard.
-          if(ageMs > 86400000 && !saved.started_at){
-            console.warn('STUDYGRID: discarding stale paused timer (>24h, no anchor)');
-            await persistTimer(); // write idle
-            return false;
-          }
-          timerRecord = saved;
-          return true;
-        }
+    const { ok, row } = await fetchTimerRecordFromServer();
+    if(!ok){
+      // Could not confirm the server's timer state after retries — see
+      // fetchTimerRecordFromServer() for exactly why this used to silently
+      // destroy real sessions. Do NOT touch timerRecord (leave it at the
+      // safe 'idle' default) and do NOT claim there's nothing to restore —
+      // return false but leave window.lastTimerSyncOK=false so boot() can
+      // tell the difference and warn instead of showing a normal-looking
+      // ready-to-start screen.
+      console.error('STUDYGRID: could not confirm persisted timer state after retries — refusing to assume idle');
+      return false;
+    }
+    const saved = row;
+    if(saved && (saved.status==='active'||saved.status==='paused')){
+      // Staleness check: a paused record with no written_at timestamp is
+      // untrustworthy (pre-fix legacy data). Reject it to avoid ghost-online.
+      const writtenAt = saved.written_at ? new Date(saved.written_at).getTime() : 0;
+      const ageMs = Date.now() - writtenAt;
+      // If the timer says active but started_at is missing → corrupt, discard.
+      if(saved.status === 'active' && !saved.started_at){
+        console.warn('STUDYGRID: discarding corrupt active timer (no started_at)');
+        await persistTimer(); // write idle
+        return false;
       }
-    }catch(e){ /* nothing saved yet */ }
+      // If data is older than 24 h and has no valid started_at anchor → discard.
+      if(ageMs > 86400000 && !saved.started_at){
+        console.warn('STUDYGRID: discarding stale paused timer (>24h, no anchor)');
+        await persistTimer(); // write idle
+        return false;
+      }
+      timerRecord = saved;
+      return true;
+    }
     return false;
   }
 
@@ -1677,23 +1748,24 @@
    * THE FIX: pull the actual persisted timer record from the server and
    * adopt it as the baseline immediately before any segment math runs, so
    * the calculation is always anchored to the truth, not to whatever this
-   * tab last happened to see. */
+   * tab last happened to see. Uses fetchTimerRecordFromServer() (retries +
+   * explicit ok/fail) rather than a single best-effort attempt — see that
+   * function's comment for the silent-data-loss incident this closes. On
+   * failure after retries, timerRecord is deliberately left untouched;
+   * callers check window.lastTimerSyncOK to know whether to trust it. */
   async function refreshTimerFromServer(){
     if(!state.id || !sb) return timerRecord;
-    try{
-      const r = await window.storage.get(timerCloudKey(), true);
-      if(r && r.value){
-        const saved = JSON.parse(r.value);
-        if(saved && saved.status){
-          timerRecord = {
-            status             : saved.status,
-            started_at         : saved.started_at||null,
-            accumulated_seconds: saved.accumulated_seconds||0,
-            topic              : saved.topic || timerRecord.topic || '',
-          };
-        }
-      }
-    }catch(e){ console.warn('STUDYGRID: timer refresh failed, using local record', e); }
+    const { ok, row } = await fetchTimerRecordFromServer();
+    if(ok && row && row.status){
+      timerRecord = {
+        status             : row.status,
+        started_at         : row.started_at||null,
+        accumulated_seconds: row.accumulated_seconds||0,
+        topic              : row.topic || timerRecord.topic || '',
+      };
+    }else if(!ok){
+      console.warn('STUDYGRID: timer refresh failed after retries, using in-memory record', timerRecord);
+    }
     return timerRecord;
   }
 
@@ -1712,6 +1784,15 @@
     // active or paused session running, don't silently stomp on it by
     // starting a fresh one on top.
     await refreshTimerFromServer();
+    if(!window.lastTimerSyncOK){
+      // Couldn't confirm the server's real timer state after retries — see
+      // fetchTimerRecordFromServer() for the incident this prevents.
+      // Refusing to start rather than risk silently overwriting a session
+      // that's genuinely still running elsewhere and just couldn't be
+      // reached from here right now.
+      showToast('Can\'t verify timer state', 'Could not confirm whether a session is already running. Check your connection and try again — nothing has been started.');
+      return;
+    }
     if(timerRecord.status === 'active' || timerRecord.status === 'paused'){
       applyTimerUI();
       showToast('Already running', 'A session is already '+timerRecord.status+' on another tab or device — resume or stop that one instead.');
@@ -3864,7 +3945,19 @@
       maybeShowThemeOnboarding(); // one-time auto popup for first-time visitors
       await window.getServerNow(); // prime clock offset before any elapsed-time math runs
       const hadTimer = await loadPersistedTimer();
-      if(hadTimer){ restoreTimerUI(); } else { applyTimerUI(); await recoverPendingLogIfAny(); }
+      if(hadTimer){
+        restoreTimerUI();
+      }else if(!window.lastTimerSyncOK){
+        // Could not confirm the server's timer state after retries — see
+        // fetchTimerRecordFromServer() for the incident this prevents.
+        // Show idle UI (nothing else to do right now) but warn plainly
+        // instead of a normal-looking ready-to-start screen.
+        applyTimerUI();
+        showToast('Couldn\'t verify your timer', 'If a session was left running, please check your connection and reopen before starting a new one.');
+      }else{
+        applyTimerUI();
+        await recoverPendingLogIfAny();
+      }
       if(window.subscribeOwnTimer) window.subscribeOwnTimer(state.id, handleRemoteTimerUpdate);
       if(state.rooms&&state.rooms.length){ try{ await syncGroupSelf(); }catch(e){} }
       render();
@@ -3898,7 +3991,21 @@
       migrateRoomsIfNeeded();
       await window.getServerNow(); // prime clock offset before any elapsed-time math runs
       const hadTimer = await loadPersistedTimer();
-      if(hadTimer){ restoreTimerUI(); } else { applyTimerUI(); await recoverPendingLogIfAny(); }
+      if(hadTimer){
+        restoreTimerUI();
+      }else if(!window.lastTimerSyncOK){
+        // Could not confirm the server's timer state after retries — see
+        // fetchTimerRecordFromServer() for the incident this prevents.
+        // Show idle UI (nothing else to do right now) but warn plainly
+        // instead of a normal-looking ready-to-start screen. startTimer()
+        // itself will also refuse to start on top of this if she tries
+        // before it's resolved — this toast is just the early heads-up.
+        applyTimerUI();
+        showToast('Couldn\'t verify your timer', 'If a session was left running, please check your connection and reopen before starting a new one.');
+      }else{
+        applyTimerUI();
+        await recoverPendingLogIfAny();
+      }
       if(window.subscribeOwnTimer) window.subscribeOwnTimer(state.id, handleRemoteTimerUpdate);
       if(state.rooms&&state.rooms.length){ try{ await syncGroupSelf(); }catch(e){} }
     }
