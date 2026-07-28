@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -874,13 +875,34 @@
   }
   const SB_TIMEOUT_MS = 10000; // 10s — generous for a slow connection, still far short of a hung one
 
+  /** THE BUG: this used to return null for BOTH "confirmed, no row exists"
+   * AND "the request itself failed" (timeout, network drop, Supabase
+   * error) — collapsing two completely different situations into one
+   * value. Every caller that does a read-modify-write (group chat/roster
+   * sync, resource sharing, even account login) has to fall back to some
+   * default when it gets null back. For a room's shared data, that
+   * default is an EMPTY blob — so a caller reading null after a genuine
+   * timeout would build a fresh empty room and WRITE IT, silently wiping
+   * every member and the entire chat history that was actually still
+   * there, just because the read hiccupped.
+   *
+   * That hiccup gets far more likely exactly when a room is busy — more
+   * members syncing concurrently means more simultaneous requests hitting
+   * Supabase, which means more chances for any single one of them to hit
+   * a slow moment or the 10s timeout below. That's exactly why this only
+   * ever surfaced in the one very active room and never the quiet ones,
+   * and why it looked like it came "out of nowhere."
+   *
+   * THE FIX: throw on a real failure instead of returning null for it.
+   * Callers can then tell "nothing here" (resolves to null — safe to
+   * initialize fresh) apart from "couldn't check" (throws — must NOT
+   * assume it's safe to overwrite; abort instead). */
   async function sbGet(key){
-    if(!sb) return null;
-    try{
-      const { data, error } = await withTimeout(sb.from('studygrid_kv').select('value').eq('key', key).maybeSingle(), SB_TIMEOUT_MS, 'sbGet');
-      if(error || !data) return null;
-      return { value: JSON.stringify(data.value) };
-    }catch(e){ console.error('sbGet', e); return null; }
+    if(!sb) throw new Error('Supabase client not initialized');
+    const { data, error } = await withTimeout(sb.from('studygrid_kv').select('value').eq('key', key).maybeSingle(), SB_TIMEOUT_MS, 'sbGet');
+    if(error) throw error;             // request failed — caller must NOT treat this as "empty"
+    if(!data) return null;             // confirmed: this key genuinely has no row yet
+    return { value: JSON.stringify(data.value) };
   }
   async function sbSet(key, valueString){
     if(!sb) return false;
@@ -1303,11 +1325,19 @@
   function timerCloudKey(){ return 'timer:'+state.id; }
 
   /** Write current timerRecord to Supabase immediately. No debounce.
-   * Always stamps `written_at` so peers can detect stale timer entries. */
+   * Always stamps `written_at` so peers can detect stale timer entries.
+   * Also writes that same stamp back onto the LIVE timerRecord object (not
+   * just the payload sent to the server) — handleRemoteTimerUpdate() below
+   * needs a real, current written_at on this side to tell a fresh incoming
+   * update apart from a stale/out-of-order one. Without this, the local
+   * side of that comparison stays stuck at whatever it was after the last
+   * page load, making the guard unable to actually guard anything. */
   async function persistTimer(){
     if(!state.id || !sb) return false;
-    const payload = { ...timerRecord, written_at: new Date().toISOString() };
+    const stamp   = new Date().toISOString();
+    const payload = { ...timerRecord, written_at: stamp };
     const ok = await window.storage.set(timerCloudKey(), JSON.stringify(payload), true);
+    if(ok) timerRecord.written_at = stamp;
     return !!ok;
   }
   async function flushPersistTimer(){ return await persistTimer(); }
@@ -1762,6 +1792,7 @@
         started_at         : row.started_at||null,
         accumulated_seconds: row.accumulated_seconds||0,
         topic              : row.topic || timerRecord.topic || '',
+        written_at         : row.written_at || timerRecord.written_at || null, // keep the staleness-guard timestamp real — see persistTimer()
       };
     }else if(!ok){
       console.warn('STUDYGRID: timer refresh failed after retries, using in-memory record', timerRecord);
@@ -2138,12 +2169,32 @@
    * i.e. this same account started/paused/resumed/stopped the timer from a
    * DIFFERENT tab or device. Adopts the server's record as truth here too,
    * instead of leaving this tab's UI contradicting what the server (and any
-   * other open tab) now says. Ignores echoes of this tab's own writes. */
+   * other open tab) now says. Ignores echoes of this tab's own writes.
+   *
+   * STALENESS GUARD: unlike loadPersistedTimer()/refreshTimerFromServer(),
+   * this handler reacts to a PUSHED message rather than a fetch it
+   * controls, so the retry logic in fetchTimerRecordFromServer() doesn't
+   * apply here. Realtime delivery isn't guaranteed to arrive in order —
+   * a mobile connection dropping and reconnecting (locked screen, dead
+   * zone, wifi↔cellular handoff) can deliver a backlog out of sequence.
+   * Without checking written_at, a delayed echo of an OLDER state — even
+   * a stale 'idle' from before this session started — could silently
+   * overwrite a currently-running session with no warning beyond a toast
+   * that's easy to miss. Only ever move forward in time: ignore anything
+   * that isn't strictly newer than what this tab already has confirmed
+   * (persistTimer() is what keeps timerRecord.written_at genuinely
+   * current on this side, rather than frozen from the last page load). */
   function handleRemoteTimerUpdate(rawValue){
     if(!state.id || !rawValue) return;
     let saved;
     try{ saved = typeof rawValue === 'string' ? JSON.parse(rawValue) : rawValue; }catch(e){ return; }
     if(!saved || typeof saved !== 'object' || !saved.status) return;
+
+    if(saved.written_at && timerRecord.written_at){
+      const incomingTs = new Date(saved.written_at).getTime();
+      const knownTs     = new Date(timerRecord.written_at).getTime();
+      if(incomingTs <= knownTs) return; // stale or out-of-order — ignore it
+    }
 
     const same = saved.status === timerRecord.status
               && (saved.started_at||null) === (timerRecord.started_at||null)
@@ -2152,7 +2203,7 @@
     if(same) return; // echo of our own write — nothing changed
 
     const topicEl = document.getElementById('preSessionTopic');
-    timerRecord = { status: saved.status, started_at: saved.started_at||null, accumulated_seconds: saved.accumulated_seconds||0, topic: saved.topic||'' };
+    timerRecord = { status: saved.status, started_at: saved.started_at||null, accumulated_seconds: saved.accumulated_seconds||0, topic: saved.topic||'', written_at: saved.written_at||timerRecord.written_at||null };
 
     if(timerRecord.status === 'active'){
       topicEl.disabled = true;
@@ -2486,11 +2537,21 @@
       // or hour count can appear to "revert" in the room log even though
       // their profile itself is already correct.
       await reconcileProfileWithCloud();
-      let cur = { name:name||code, members:{}, resources:[], messages:[] };
+
+      // CRITICAL: a failed read must NOT be treated the same as "this room
+      // has no data yet." Doing so is exactly how an active room's entire
+      // member list and chat history can vanish in one write — see sbGet()
+      // for the full writeup. If the fetch throws, bail out here without
+      // writing anything at all, rather than falling back to an empty blob.
+      let cur;
       try{
         const r = await window.storage.get(key, true);
-        if(r && r.value) cur = JSON.parse(r.value);
-      }catch(e){}
+        cur = (r && r.value) ? JSON.parse(r.value) : { name:name||code, members:{}, resources:[], messages:[] };
+      }catch(fetchErr){
+        console.error('STUDYGRID: group sync aborted — could not confirm existing room data, refusing to overwrite it', fetchErr);
+        return null;
+      }
+
       const lvl   = getLevelInfo(state.totalXP);
       const today = localDateKey();
       cur.members  = cur.members  || {};
@@ -2530,6 +2591,11 @@
   /* _flushGroupSync kept as alias for any remaining call sites. */
   async function _flushGroupSync(){ return syncGroupSelf(); }
 
+  // Read-only — unlike the sync/chat/resource functions above, a failed
+  // fetch here just means the caller temporarily shows "No members yet"
+  // or falls back to the room code as its display name. Nothing gets
+  // written as a result, so collapsing "failed" and "confirmed empty"
+  // into one null return is fine here (unlike sbGet's callers that write).
   async function fetchGroupForCode(code){
     if(!code) return null;
     try{
@@ -2543,8 +2609,16 @@
     if(!code) return null;
     const key = 'group:'+code;
     try{
-      let cur = { name:code, members:{}, resources:[], messages:[] };
-      try{ const r=await window.storage.get(key,true); if(r&&r.value) cur=JSON.parse(r.value); }catch(e){}
+      // Same fix as _doGroupSyncForRoom: a failed read must abort, not
+      // fall back to an empty blob that then gets written over real data.
+      let cur;
+      try{
+        const r = await window.storage.get(key,true);
+        cur = (r && r.value) ? JSON.parse(r.value) : { name:code, members:{}, resources:[], messages:[] };
+      }catch(fetchErr){
+        console.error('STUDYGRID: resource share aborted — could not confirm existing room data', fetchErr);
+        return null;
+      }
       cur.resources = cur.resources||[];
       cur.resources.unshift({ id:uid(6), title, url, addedBy:state.id, addedByName:state.name, ts:Date.now() });
       cur.resources = cur.resources.slice(0,30);
@@ -2563,9 +2637,13 @@
     input.value = '';
     const key = 'group:'+code;
     try{
-      let cur = { name:code, members:{}, resources:[], messages:[] };
+      // Same fix as _doGroupSyncForRoom/addResourceToGroup: if the fetch
+      // below throws (real failure, not "confirmed empty"), this whole
+      // try block aborts before reaching set() — nothing gets written, so
+      // a slow/failed read can no longer wipe the room's chat + roster.
+      let cur;
       const r = await window.storage.get(key,true);
-      if(r&&r.value) cur=JSON.parse(r.value);
+      cur = (r && r.value) ? JSON.parse(r.value) : { name:code, members:{}, resources:[], messages:[] };
       cur.messages = cur.messages||[];
       cur.messages.push({ sender:state.name, text, ts:Date.now() });
       if(cur.messages.length>50) cur.messages.shift();
@@ -3916,7 +3994,19 @@
       if(!password){ alert('Please enter a password.'); return; }
 
       const cloudKey  = 'user-profile:'+name.toLowerCase();
-      const cloudData = await window.storage.get(cloudKey, true);
+      // Same bug class as the room-sync fixes: a failed lookup here must
+      // NOT be treated the same as "no account exists yet," or a network
+      // hiccup during login could silently create a brand-new blank
+      // profile right over an existing account (losing access to all its
+      // history until the person notices and tracks down the mixup).
+      let cloudData;
+      try{
+        cloudData = await window.storage.get(cloudKey, true);
+      }catch(fetchErr){
+        console.error('STUDYGRID: login check failed — could not confirm whether this account exists', fetchErr);
+        alert('Could not reach the server to check your account. Please check your connection and try again.');
+        return;
+      }
       if(cloudData&&cloudData.value){
         const saved = JSON.parse(cloudData.value);
         if(saved.password&&saved.password!==password){ alert('Incorrect password. Please try again.'); return; }
