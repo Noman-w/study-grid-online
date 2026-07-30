@@ -522,6 +522,16 @@
   .chat-pane.active-pane{display:flex;}
   .chat-pane .chat-thread{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:6px;}
   .chat-pane .chat-input-row{display:flex;gap:6px;padding:10px 14px;border-top:1px solid var(--line-soft);flex-shrink:0;}
+  .chat-attach-btn{padding:0 10px;font-size:15px;line-height:1;flex-shrink:0;}
+  .chat-attach-preview{padding:8px 14px 0;flex-shrink:0;}
+  .chat-attach-preview[hidden]{display:none;}
+  .chat-attach-chip{display:flex;align-items:center;gap:8px;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:6px 10px;}
+  .chat-attach-chip img,.chat-attach-chip video{width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;}
+  .chat-attach-status{font-size:11px;color:var(--muted-dim);flex:1;}
+  .chat-attach-remove{background:none;border:none;color:var(--muted-dim);cursor:pointer;font-size:13px;padding:2px 4px;flex-shrink:0;}
+  .chat-attach-remove:hover{color:var(--text);}
+  .chat-media-img,.chat-media-video{max-width:100%;width:200px;border-radius:14px;display:block;margin-bottom:3px;}
+  .chat-media-img{cursor:zoom-in;}
 
   /* Chat / Resources tabs inside each room's popup pane */
   .popup-tabs{display:flex;gap:4px;padding:8px 14px 0;flex-shrink:0;}
@@ -1192,7 +1202,7 @@
   /* which joined room is currently shown (single-layer view + toggle balls) */
   let activeRoomCode = null;
   function getChatState(code){
-    if(!roomChatState[code]) roomChatState[code] = {lastSeenMessageTs:0, chatInitialized:false, forceChatScroll:false};
+    if(!roomChatState[code]) roomChatState[code] = {lastSeenMessageTs:0, chatInitialized:false, forceChatScroll:false, pendingAttachment:null, sending:false};
     return roomChatState[code];
   }
 
@@ -2629,14 +2639,64 @@
 
   const CHAT_MAX_LEN = 500; // hard cap so pasted text can't balloon the room blob / egress
 
+  /* ── CHAT MEDIA (photos/videos) — Supabase free-tier budget notes ──────────
+   * Storage: 0.5GB total. Egress: 5GB/month, ~150MB/month in ordinary use.
+   * Images and videos live in Supabase Storage (a separate quota from the
+   * Postgres row data everything else here uses) — only a small
+   * {type,path,url} reference goes into the chat message itself, so this
+   * doesn't touch the room-blob-rewritten-on-every-send cost above.
+   *
+   * Storage stays bounded because sendChatMessage() below deletes a
+   * message's Storage object the moment that message ages out of the
+   * existing 50-message cap — so steady-state usage is roughly
+   * (~50 × average media size) per room, not unbounded growth.
+   *
+   * Egress is the tighter budget in practice: every room member who opens
+   * chat re-downloads whatever media is visible (first view only — the long
+   * cache-control set on upload means repeat views shouldn't re-cost
+   * anything). A compressed ~150KB photo viewed by 15 members is ~2MB total
+   * — cheap. An uncompressed video is not: even one 5MB video viewed by 15
+   * people is 75MB — 1.5% of the *entire monthly* egress budget from a
+   * single message. That's why video gets a hard cap and zero compression
+   * attempt (no light way to safely transcode video in-browser), while
+   * images get real client-side compression before upload.
+   */
+  const MEDIA_BUCKET             = 'studygrid-media';
+  const CHAT_IMAGE_MAX_DIM       = 1280;            // longest edge in px, after downscale
+  const CHAT_IMAGE_QUALITY       = 0.75;            // WebP/JPEG encode quality
+  const CHAT_IMAGE_SOURCE_MAX_B  = 20*1024*1024;    // reject absurd raw input before even trying to compress
+  const CHAT_IMAGE_OUTPUT_MAX_B  = 1.5*1024*1024;   // safety net if compression doesn't shrink enough
+  const CHAT_VIDEO_MAX_B         = 5*1024*1024;     // hard cap — no client-side transcoding attempted
+
   async function sendChatMessage(code){
+    const chatState = getChatState(code);
+    if(chatState.sending) return; // guard against Enter mashed while an upload is already in flight
     const input = document.getElementById('chatInput-'+code);
-    if(!input) return;
-    const text  = input.value.trim().slice(0, CHAT_MAX_LEN);
-    if(!text || !code) return;
+    if(!input || !code) return;
+    const att  = chatState.pendingAttachment;
+    const text = input.value.trim().slice(0, CHAT_MAX_LEN);
+    if(!text && !att) return;
+    if(att && att.compressing){
+      showToast('Still processing', 'Give the photo a second to finish compressing.');
+      return;
+    }
+
+    chatState.sending = true;
     input.value = '';
-    const key = 'group:'+code;
+    const sendBtn = document.querySelector('#chatPane-'+code+' [data-send-btn]');
+    let media = null;
     try{
+      if(att){
+        if(sendBtn){ sendBtn.disabled = true; sendBtn.textContent = 'Sending…'; }
+        media = await uploadChatMedia(code, att);
+        // Only clear the staged attachment once the upload actually
+        // succeeds — if it throws, the compressed file stays staged so
+        // the user can just hit Send again instead of re-picking/
+        // re-compressing the same photo.
+        clearChatAttachment(code);
+      }
+
+      const key = 'group:'+code;
       // Same fix as _doGroupSyncForRoom/addResourceToGroup: if the fetch
       // below throws (real failure, not "confirmed empty"), this whole
       // try block aborts before reaching set() — nothing gets written, so
@@ -2645,12 +2705,167 @@
       const r = await window.storage.get(key,true);
       cur = (r && r.value) ? JSON.parse(r.value) : { name:code, members:{}, resources:[], messages:[] };
       cur.messages = cur.messages||[];
-      cur.messages.push({ sender:state.name, text, ts:Date.now() });
-      if(cur.messages.length>50) cur.messages.shift();
+      const msg = { sender:state.name, text, ts:Date.now() };
+      if(media) msg.media = media;
+      cur.messages.push(msg);
+      if(cur.messages.length>50){
+        // Delete the outgoing message's Storage object (if any) so media
+        // storage stays bounded to ~50 messages' worth per room instead of
+        // growing forever — see the CHAT MEDIA budget notes above.
+        const dropped = cur.messages.shift();
+        if(dropped && dropped.media && dropped.media.path) deleteChatMedia(dropped.media.path);
+      }
       await window.storage.set(key, JSON.stringify(cur), true);
       getChatState(code).forceChatScroll = true;
       renderRoomPanel(code, cur);
-    }catch(e){ console.error('chat failed', e); }
+    }catch(e){
+      console.error('chat failed', e);
+      if(att && !media) showToast('Upload failed', 'Could not send the attachment — check your connection and try again.');
+    }finally{
+      chatState.sending = false;
+      if(sendBtn){ sendBtn.disabled = false; sendBtn.textContent = 'Send'; }
+    }
+  }
+
+  /** Upload a staged attachment to Supabase Storage and return the small
+   * {type, path, url, w, h} reference that goes into the chat message.
+   * Throws on failure — caller decides how to surface that. */
+  async function uploadChatMedia(code, att){
+    const ext  = att.kind==='image' ? 'webp' : ((att.file.type||'').split('/')[1] || 'mp4');
+    const path = code+'/'+Date.now()+'_'+uid(6)+'.'+ext;
+    const { error } = await sb.storage.from(MEDIA_BUCKET).upload(path, att.file, {
+      contentType : att.file.type || (att.kind==='image' ? 'image/webp' : 'video/mp4'),
+      cacheControl: '31536000', // 1 year — repeat views of the same message shouldn't re-cost egress
+      upsert      : false
+    });
+    if(error) throw error;
+    const { data } = sb.storage.from(MEDIA_BUCKET).getPublicUrl(path);
+    return { type:att.kind, path, url:data.publicUrl, w:att.w||null, h:att.h||null };
+  }
+
+  /** Best-effort cleanup of a Storage object for a message that's aged out
+   * of the 50-message cap. Failure here just leaves one orphaned file —
+   * not worth surfacing to the user or retrying. */
+  async function deleteChatMedia(path){
+    try{ await sb.storage.from(MEDIA_BUCKET).remove([path]); }
+    catch(e){ console.warn('STUDYGRID: failed to clean up dropped chat media', path, e); }
+  }
+
+  /** Downscale + re-encode an image client-side before it ever reaches
+   * Storage — this is most of the egress protection described in the
+   * budget notes above. Tries WebP first (meaningfully smaller than JPEG
+   * at the same visual quality); if the browser silently substitutes a
+   * different format (older engines fall back to PNG rather than erroring,
+   * per spec), falls back to an explicit JPEG encode instead — PNG is
+   * lossless and ignores the quality argument, so a browser that can't
+   * encode WebP would otherwise produce files far larger than this budget
+   * can afford. */
+  function compressImageForChat(file){
+    return new Promise((resolve, reject)=>{
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = ()=>{
+        URL.revokeObjectURL(url);
+        let width = img.naturalWidth, height = img.naturalHeight;
+        const longest = Math.max(width, height);
+        if(longest > CHAT_IMAGE_MAX_DIM){
+          const scale = CHAT_IMAGE_MAX_DIM/longest;
+          width  = Math.max(1, Math.round(width*scale));
+          height = Math.max(1, Math.round(height*scale));
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const tryEncode = (mime, quality)=> new Promise((res, rej)=>{
+          canvas.toBlob(blob=>{ blob ? res(blob) : rej(new Error('canvas.toBlob returned null')); }, mime, quality);
+        });
+
+        (async ()=>{
+          try{
+            let blob = await tryEncode('image/webp', CHAT_IMAGE_QUALITY);
+            if(blob.type !== 'image/webp') blob = await tryEncode('image/jpeg', CHAT_IMAGE_QUALITY);
+            if(blob.size > CHAT_IMAGE_OUTPUT_MAX_B){
+              // one more, more aggressive pass before accepting it as-is
+              const stronger = await tryEncode(blob.type, 0.45);
+              if(stronger.size < blob.size) blob = stronger;
+            }
+            resolve({ blob, w:width, h:height });
+          }catch(e){ reject(e); }
+        })();
+      };
+      img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('image failed to load')); };
+      img.src = url;
+    });
+  }
+
+  /** Entry point for both the 📎 file picker and pasting an image into the
+   * chat input. Stages the file, kicks off compression for images (videos
+   * are staged as-is — see the budget notes above for why), and re-renders
+   * the preview chip as that progresses. */
+  async function handleChatAttachment(code, file){
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    if(!isImage && !isVideo){
+      showToast('Unsupported file', 'Only photos and videos can be attached here.');
+      return;
+    }
+    if(isVideo && file.size > CHAT_VIDEO_MAX_B){
+      showToast('Video too large', 'Videos are capped at '+Math.round(CHAT_VIDEO_MAX_B/1024/1024)+'MB to keep the shared storage/egress budget safe — try a shorter clip.');
+      return;
+    }
+    if(isImage && file.size > CHAT_IMAGE_SOURCE_MAX_B){
+      showToast('Image too large', 'That photo is over '+Math.round(CHAT_IMAGE_SOURCE_MAX_B/1024/1024)+'MB — try a smaller one.');
+      return;
+    }
+
+    const chatState = getChatState(code);
+    if(chatState.pendingAttachment && chatState.pendingAttachment.previewUrl){
+      URL.revokeObjectURL(chatState.pendingAttachment.previewUrl); // replacing whatever was staged, if anything
+    }
+    const pending = { file, kind: isImage?'image':'video', compressing: isImage, previewUrl: URL.createObjectURL(file), w:null, h:null };
+    chatState.pendingAttachment = pending;
+    renderAttachPreview(code);
+    if(!isImage) return; // videos: sent as-is, no client-side re-encode
+
+    try{
+      const compressed = await compressImageForChat(file);
+      if(chatState.pendingAttachment !== pending) return; // removed or replaced mid-compression
+      pending.file        = compressed.blob;
+      pending.w            = compressed.w;
+      pending.h            = compressed.h;
+      pending.compressing = false;
+      renderAttachPreview(code);
+    }catch(e){
+      console.error('STUDYGRID: image compression failed', e);
+      if(chatState.pendingAttachment === pending) clearChatAttachment(code);
+      showToast('Could not process image', 'Please try a different photo.');
+    }
+  }
+
+  function renderAttachPreview(code){
+    const box = document.getElementById('chatAttachPreview-'+code);
+    if(!box) return;
+    const att = getChatState(code).pendingAttachment;
+    if(!att){ box.hidden = true; box.innerHTML = ''; return; }
+    box.hidden = false;
+    box.innerHTML = `
+      <div class="chat-attach-chip">
+        ${att.kind==='image' ? `<img src="${att.previewUrl}" alt="">` : `<video src="${att.previewUrl}" muted></video>`}
+        <span class="chat-attach-status">${att.compressing ? 'Compressing…' : (att.kind==='image'?'Photo ready':'Video ready')}</span>
+        <button type="button" class="chat-attach-remove" title="Remove">✕</button>
+      </div>`;
+    box.querySelector('.chat-attach-remove').onclick = ()=> clearChatAttachment(code);
+  }
+
+  function clearChatAttachment(code){
+    const chatState = getChatState(code);
+    if(chatState.pendingAttachment && chatState.pendingAttachment.previewUrl){
+      URL.revokeObjectURL(chatState.pendingAttachment.previewUrl);
+    }
+    chatState.pendingAttachment = null;
+    renderAttachPreview(code);
   }
 
   /* ── FLOATING CHAT POPUP ────────────────────────────────────────────────── */
@@ -2823,9 +3038,34 @@
         const pane = createChatPane(room.code);
         document.getElementById('chatPopupBody').appendChild(pane);
         const ci = pane.querySelector('#chatInput-'+room.code);
-        if(ci) ci.onkeydown = (e)=>{ if(e.key==='Enter') sendChatMessage(room.code); };
+        if(ci){
+          ci.onkeydown = (e)=>{ if(e.key==='Enter') sendChatMessage(room.code); };
+          // Paste-an-image-like-text: only intercepts actual image data on
+          // the clipboard (a real screenshot/copied image) — plain text
+          // pastes fall through untouched.
+          ci.addEventListener('paste', (e)=>{
+            const items = e.clipboardData && e.clipboardData.items;
+            if(!items) return;
+            for(const item of items){
+              if(item.kind==='file' && item.type.startsWith('image/')){
+                const file = item.getAsFile();
+                if(file){ e.preventDefault(); handleChatAttachment(room.code, file); }
+                break;
+              }
+            }
+          });
+        }
         const sendBtn = pane.querySelector('[data-send-btn]');
         if(sendBtn) sendBtn.onclick = ()=> sendChatMessage(room.code);
+        const attachBtn  = pane.querySelector('#chatAttachBtn-'+room.code);
+        const fileInput  = pane.querySelector('#chatFile-'+room.code);
+        if(attachBtn && fileInput){
+          attachBtn.onclick = ()=> fileInput.click();
+          fileInput.onchange = ()=>{
+            if(fileInput.files && fileInput.files[0]) handleChatAttachment(room.code, fileInput.files[0]);
+            fileInput.value = ''; // allow re-selecting the same file later
+          };
+        }
 
         if(cachedRoomData[room.code]) renderRoomPanel(room.code, cachedRoomData[room.code]);
       }
@@ -2885,8 +3125,11 @@
       </div>
       <div class="popup-tab-content active-tab" data-tab-content="chat">
         <div class="chat-thread" id="chatMessages-${code}"></div>
+        <div class="chat-attach-preview" id="chatAttachPreview-${code}" hidden></div>
         <div class="chat-input-row">
-          <input type="text" id="chatInput-${code}" maxlength="500" placeholder="Type a message...">
+          <input type="file" id="chatFile-${code}" accept="image/*,video/*" hidden>
+          <button type="button" class="btn btn-sm chat-attach-btn" id="chatAttachBtn-${code}" title="Attach a photo or video">📎</button>
+          <input type="text" id="chatInput-${code}" maxlength="500" placeholder="Message, or paste a photo…">
           <button class="btn btn-primary btn-sm" data-send-btn>Send</button>
         </div>
       </div>
@@ -3495,13 +3738,14 @@
       if(chatState.chatInitialized){
         messages.forEach(msg=>{
           if((msg.ts||0) > chatState.lastSeenMessageTs && msg.sender !== state.name){
-            showToast('New Message 💬', msg.sender+': '+msg.text);
+            const preview = msg.text || (msg.media ? (msg.media.type==='image' ? '📷 Photo' : '🎥 Video') : '');
+            showToast('New Message 💬', msg.sender+': '+preview);
             if(userIsAway){
               document.getElementById('chatFab')?.classList.add('has-unread');
               playNotificationSound();
               if('Notification' in window && Notification.permission === 'granted'){
                 new Notification(`New Message from ${msg.sender}`, {
-                  body: msg.text,
+                  body: preview,
                   tag: 'studygrid-chat-'+code
                 });
               }
@@ -3518,7 +3762,21 @@
         const isMine = msg.sender === state.name;
         const mDiv   = document.createElement('div');
         mDiv.className = 'chat-msg '+(isMine?'mine':'theirs');
-        mDiv.innerHTML = `<div class="chat-sender">${escapeHtml(msg.sender)}</div><div class="chat-bubble">${escapeHtml(msg.text)}</div>`;
+        let mediaHtml = '';
+        if(msg.media && msg.media.type==='image'){
+          // loading="lazy": media further up a long scrollback isn't
+          // fetched (no egress spent) until actually scrolled into view.
+          mediaHtml = `<img class="chat-media-img" src="${escapeHtml(msg.media.url)}" loading="lazy" alt="">`;
+        }else if(msg.media && msg.media.type==='video'){
+          // preload="none": opening chat doesn't fetch every video's bytes
+          // up front — only once someone actually presses play.
+          mediaHtml = `<video class="chat-media-video" src="${escapeHtml(msg.media.url)}" controls preload="none"></video>`;
+        }
+        const textHtml = msg.text ? `<div class="chat-bubble">${escapeHtml(msg.text)}</div>` : '';
+        mDiv.innerHTML = `<div class="chat-sender">${escapeHtml(msg.sender)}</div>${mediaHtml}${textHtml}`;
+        if(msg.media && msg.media.type==='image'){
+          mDiv.querySelector('.chat-media-img').addEventListener('click', ()=>window.open(msg.media.url, '_blank'));
+        }
         chatBox.appendChild(mDiv);
       });
       if(shouldScroll) chatBox.scrollTop = chatBox.scrollHeight;
