@@ -1228,6 +1228,16 @@
     theme:'default', // this user's chosen palette — synced so OTHER viewers
                       // render this member's avatar in it, independent of
                       // whatever theme the viewer has picked for themselves
+    themeOnboarded:false, // true once this ACCOUNT has ever picked a theme
+                          // or dismissed the popup, on ANY device — synced
+                          // to the cloud profile like everything else in
+                          // this object (saveProfile() just serializes the
+                          // whole thing), so maybeShowThemeOnboarding()
+                          // below can tell "never onboarded" apart from
+                          // "just haven't opened this app in THIS browser
+                          // before" — a private window or a new phone
+                          // logging into an already-onboarded account
+                          // shouldn't see the popup again.
   };
 
   /* ── timer record ───────────────────────────────────────────────────────────
@@ -4023,13 +4033,15 @@
      choice to localStorage so it's remembered on the next visit, and
      re-syncs the button icon, canvases, and a confirmation toast.
 
-     First-run behavior: if this browser has never saved a theme choice
-     (localStorage has no 'studygrid-theme' key at all), the popup opens
-     automatically once — no tap required — via maybeShowThemeOnboarding(),
-     called from boot() and from onboardSubmit() below. Once any choice is
-     saved (or the popup is dismissed via Close, which counts as "seen"),
-     the key exists and the popup never opens itself again — from then on
-     it only opens when themeToggleBtn is tapped. Add a new theme by adding
+     First-run behavior: if this ACCOUNT has never onboarded before
+     (state.themeOnboarded is false — a field on the synced profile, not
+     this browser), the popup opens automatically once — no tap required —
+     via maybeShowThemeOnboarding(), called from boot() and from
+     onboardSubmit() below. Once a choice is made (or the popup is
+     dismissed via Close, which counts the same) state.themeOnboarded is
+     saved back to the cloud profile as true, and the popup never opens
+     itself again on ANY device logged into that account — from then on it
+     only opens when themeToggleBtn is tapped. Add a new theme by adding
      one CSS block + one THEMES/THEME_COLORS entry here — nothing else
      needs to change. */
   const THEMES = [
@@ -4070,17 +4082,32 @@
     btn.textContent = t.icon;
     btn.title = 'Theme: '+t.label+' — tap to switch';
   }
-  // Keeps state.theme aligned with THIS browser's actual applied theme
-  // (localStorage 'studygrid-theme', or 'default' if none saved yet) —
-  // called after profile load and during onboarding so the value pushed
-  // to peers always matches what this device is really showing, even
-  // before the user has touched the theme popup this session, and even
-  // if a cloud profile fetched from a different device carried an older
-  // theme choice.
-  function syncStateThemeFromLocalStorage(){
-    let saved = null;
-    try{ saved = localStorage.getItem('studygrid-theme'); }catch(e){}
-    state.theme = saved || 'default';
+  // Applies whichever theme state.theme currently holds — the value
+  // loadProfile()/onboardSubmit() just brought down from the CLOUD profile,
+  // same as every other account field — to THIS device: sets <html
+  // data-theme>, mirrors it into this device's own localStorage (so the
+  // early flash-prevention read in <head> is correct on the next visit
+  // too), and refreshes the toggle icon + any avatar-wave colors already
+  // on screen.
+  //
+  // Cloud is the authority here, exactly like the rest of the profile — a
+  // theme changed on one device reaches every other device the next time
+  // THAT device logs in/boots. This function used to instead read
+  // localStorage and overwrite state.theme with whatever (often nothing)
+  // THIS device had saved locally, which silently discarded the account's
+  // real theme on any device that hadn't personally set one yet — e.g. a
+  // friend's phone showing default right after her theme was set to paper
+  // on another device, even though she never touched the picker herself.
+  // A device only shows something DIFFERENT from the account's saved
+  // theme in the moment right after picking a new one in the popup, which
+  // calls applyTheme() (below) directly and isn't affected by this at all.
+  function syncThemeFromState(){
+    const key = state.theme || 'default';
+    if(key==='default') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', key);
+    try{ localStorage.setItem('studygrid-theme', key); }catch(e){}
+    refreshThemeAccentColors();
+    updateThemeToggleIcon();
   }
   // Applies + persists a theme choice. Used by the popup below and by
   // maybeShowThemeOnboarding()'s auto-first-run path.
@@ -4099,6 +4126,7 @@
     // right away rather than waiting for an unrelated sync.
     if(state.id){
       state.theme = key;
+      state.themeOnboarded = true;
       saveProfile(); // debounced cloud/local profile save
       // Instantly recolor this user's own avatar-wave(s) already on screen
       // (podium/leaderboard/self-row) without waiting on the network —
@@ -4133,16 +4161,19 @@
       };
     });
   }
-  // First-run only: auto-opens the theme popup once per browser, before any
-  // preference has ever been saved. Called from boot() (returning visitors
-  // who skip the login modal) and from onboardSubmit() (fresh signups/logins,
-  // right after that modal closes) so it never stacks on top of it. Safe to
-  // call from both places — after the first save/dismissal the localStorage
-  // key exists and every later call is a no-op.
+  // First-run only: auto-opens the theme popup once per ACCOUNT (not once
+  // per browser). Called from boot() (returning visitors who skip the
+  // login modal) and from onboardSubmit() (fresh signups/logins, right
+  // after that modal closes) so it never stacks on top of it. Gated on
+  // state.themeOnboarded, which loadProfile()/onboardSubmit() just loaded
+  // from the cloud profile — so an account that's already been onboarded
+  // from one device won't see this again from a private window, a new
+  // phone, or a cleared cache, even though THOSE never saved anything
+  // locally themselves. Safe to call from both places — after the first
+  // save/dismissal state.themeOnboarded is true and every later call is a
+  // no-op, on any device.
   function maybeShowThemeOnboarding(){
-    let seen;
-    try{ seen = localStorage.getItem('studygrid-theme'); }catch(e){ seen = 'default'; }
-    if(seen!==null) return;
+    if(state.themeOnboarded) return;
     renderThemeModal();
     openModal('themeModal');
   }
@@ -4172,9 +4203,13 @@
     };
     document.getElementById('themeModalClose').onclick = ()=>{
       // First-run auto popup: closing without picking still counts as
-      // "seen" so it won't reopen itself on the next visit — same effect
-      // as tapping a theme (keeps the current/default palette).
-      try{ if(localStorage.getItem('studygrid-theme')===null) applyTheme('default'); }catch(e){}
+      // "onboarded" so it won't reopen itself on ANY device — same effect
+      // as tapping a theme (keeps the current/default palette). Gated on
+      // state.themeOnboarded rather than localStorage so this correctly
+      // no-ops for a manual open (themeToggleBtn) on an already-onboarded
+      // account, instead of re-applying 'default' over whatever theme is
+      // actually active.
+      if(!state.themeOnboarded) applyTheme('default');
       closeModal('themeModal');
     };
     refreshThemeAccentColors();
@@ -4345,7 +4380,7 @@
         state.dailyGoalHours = goal;
         state.rooms          = [];
       }
-      syncStateThemeFromLocalStorage();
+      syncThemeFromState();
       saveProfile();
       await flushProfileSave();
       closeModal('onboardModal');
@@ -4376,7 +4411,7 @@
   async function boot(){
     wireEvents();
     await loadProfile();
-    syncStateThemeFromLocalStorage();
+    syncThemeFromState();
     const skippedOnboardModal = !!(state.id && state.name); // mirrors maybeOnboard()'s own check
     await maybeOnboard();
     // Returning visitors never see #onboardModal, so this is the only place
