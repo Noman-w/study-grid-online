@@ -38,6 +38,35 @@
     --teal:#4ade80; --teal-rgb:74,222,128; --teal-light:#9df5c2;
     --violet:#14b8a6; --violet-rgb:20,184,166;
   }
+  /* "Paper doodle" — the one light theme in the set. Unlike the three
+     themes above (which only ever swap the three accent variables and
+     keep the same dark surfaces), going light means the base surface
+     variables — bg/panel/text/muted/line/shadow — all need their own
+     values too, so this block is bigger. Warm off-white "paper" surfaces
+     with soft ink-brown text, and a coral/plum/gold accent trio chosen
+     deliberately warm — every other theme here leans cool (mint, blue,
+     magenta, green), so warm tones read as genuinely distinct rather than
+     a paler copy of one of them, and it steers clear of the cream+
+     terracotta combo that's become an AI-design cliché. */
+  :root[data-theme="paper"]{
+    --bg:#faf8f4; --line:rgba(46,43,38,.16); --line-soft:rgba(46,43,38,.08);
+    --text:#2e2b26; --muted:#6b6459; --muted-dim:#9c9487;
+    --panel:#ffffff; --panel-2:#f2efe7;
+    --teal:#e8544a; --teal-rgb:232,84,74; --teal-light:#f2948d;
+    --violet:#c2417a; --violet-rgb:194,65,122;
+    --amber:#ca8a04; --amber-rgb:202,138,4;
+    --glass-shadow:0 20px 45px rgba(60,50,30,.14), inset 0 1px 0 rgba(255,255,255,.7);
+    --glass-shadow-sm:0 8px 18px rgba(60,50,30,.12), inset 0 1px 0 rgba(255,255,255,.6);
+  }
+  /* Two spots elsewhere in this file hardcode a WHITE-tinted overlay that
+     assumes a dark backdrop to show up against — invisible (or just
+     wrong) on paper's light surfaces, so they get an ink-tinted swap here
+     rather than in their original rule. The progress track especially:
+     without this it's not just less pretty, the unfilled part of every
+     progress bar disappears entirely against the white panel. */
+  [data-theme="paper"] .leader-progress .lp-track{background:rgba(46,43,38,.09);}
+  [data-theme="paper"] .card::before,
+  [data-theme="paper"] .modal::before{background:linear-gradient(90deg,transparent,rgba(46,43,38,.14),transparent);}
   *{box-sizing:border-box;margin:0;padding:0;}
   /* ── ambient fluid orbs — fixed behind everything, whole-app depth cue ─── */
   .ambient-orbs{position:fixed;inset:0;overflow:hidden;z-index:-1;pointer-events:none;}
@@ -49,16 +78,36 @@
   @keyframes orbFloatB{0%,100%{transform:translate(0,0);}50%{transform:translate(-35px,25px);}}
   @media(prefers-reduced-motion:reduce){.ambient-orbs .orb{animation:none;}}
 
+  /* ── doodle layer — paper theme only ──────────────────────────────────
+     Small hand-drawn-style SVG doodles fixed at the viewport edges,
+     margin-of-a-notebook style. Deliberately static: no animation, no
+     blur, no backdrop-filter. Given how much of this file's history is
+     "removed an ambient/animated effect because it caused lag on real
+     devices" (orbs, smooth-scroll, fixed backgrounds), a light theme's
+     one signature flourish isn't the place to reintroduce that risk —
+     a few motionless line drawings cost the browser almost nothing to
+     paint, so that's the whole budget spent here. */
+  .doodle-layer{display:none;position:fixed;inset:0;z-index:-1;pointer-events:none;color:rgba(46,43,38,.16);}
+  :root[data-theme="paper"] .doodle-layer{display:block;}
+  :root[data-theme="paper"] .ambient-orbs{display:none;}
+  .doodle-layer svg{position:absolute;overflow:visible;}
+  .doodle-star     {top:6%;  left:5%;  width:30px;}
+  .doodle-squiggle  {top:9%;  right:7%; width:56px;}
+  .doodle-book      {bottom:8%; left:6%; width:40px;}
+  .doodle-pencil    {bottom:7%; right:6%; width:32px; transform:rotate(-12deg);}
+  .doodle-cup       {top:46%; left:2.5%; width:32px;}
+  .doodle-check     {top:44%; right:3%;  width:30px;}
+
   /* ── BACKGROUND (solid blackish-violet, no image, no fixed-attachment) ─
      Fixed background-image + 17 backdrop-filter glass panels was forcing a
      full repaint of every blurred panel on each scroll frame — that's what
      was causing the lag. Solid color removes that cost entirely. ────────── */
   html{
-    background:#0a0710;
+    background:var(--bg);
   }
   html,body{background-color:transparent;color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
   body{
-    background-color:#0a0710;
+    background-color:var(--bg);
     background-image:linear-gradient(var(--line-soft) 1px,transparent 1px),linear-gradient(90deg,var(--line-soft) 1px,transparent 1px);
     background-size:32px 32px;background-position:center top;min-height:100vh;
     overflow-x:hidden;
@@ -438,7 +487,7 @@
   /* modal */
   .modal-bg{position:fixed;inset:0;background:rgba(5,6,8,.92);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;}
   .modal-bg.show{display:flex;}
-  .modal{position:relative;background:#14171c;border:1px solid var(--line);border-radius:var(--radius-lg);padding:30px;width:100%;max-width:400px;max-height:90vh;overflow-y:auto;box-shadow:var(--glass-shadow);}
+  .modal{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg);padding:30px;width:100%;max-width:400px;max-height:90vh;overflow-y:auto;box-shadow:var(--glass-shadow);}
   .modal::before{content:'';position:absolute;top:0;left:12%;right:12%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent);pointer-events:none;}
   .modal-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;margin-bottom:4px;}
   .modal-desc{font-size:12px;color:var(--muted);margin-bottom:18px;line-height:1.5;}
@@ -501,7 +550,7 @@
   .chat-popup{
     position:fixed;bottom:90px;right:22px;width:390px;max-width:calc(100vw - 32px);
     height:560px;max-height:calc(100vh - 130px);
-    background:#14171c;border:1px solid var(--line);border-radius:24px;
+    background:var(--panel);border:1px solid var(--line);border-radius:24px;
     display:none;flex-direction:column;overflow:hidden;
     box-shadow:var(--glass-shadow);
     z-index:91;opacity:0;transform:translateY(16px) scale(.97);transition:opacity .2s ease,transform .2s ease;
@@ -557,6 +606,14 @@
 </head>
 <body>
 <div class="ambient-orbs" aria-hidden="true"><div class="orb orb-a"></div><div class="orb orb-b"></div><div class="orb orb-c"></div></div>
+<div class="doodle-layer" aria-hidden="true">
+  <svg class="doodle-star" viewBox="0 0 40 40"><path d="M20 3 L23.5 16.5 L37 20 L23.5 23.5 L20 37 L16.5 23.5 L3 20 L16.5 16.5 Z" fill="currentColor"/></svg>
+  <svg class="doodle-squiggle" viewBox="0 0 60 20"><path d="M2 12 Q10 3, 18 12 T34 12 T50 12 T58 12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+  <svg class="doodle-book" viewBox="0 0 44 32"><path d="M22 7 C18 4 10 3 4 4 L4 26 C10 25 18 26 22 29 C26 26 34 25 40 26 L40 4 C34 3 26 4 22 7 Z" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/><path d="M22 7 L22 29" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+  <svg class="doodle-pencil" viewBox="0 0 40 40"><path d="M8 32 L6 36 L10 34 L30 14 L26 10 Z" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/><path d="M26 10 L30 6 L34 10 L30 14 Z" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>
+  <svg class="doodle-cup" viewBox="0 0 40 40"><path d="M8 14 L10 30 C10 33 14 34.5 18 34.5 C22 34.5 26 33 26 30 L28 14 Z" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/><path d="M28 16 C33 16 33 24 28 24" stroke="currentColor" stroke-width="2" fill="none"/><path d="M13 10 C13 8 15 8 15 6 M19 10 C19 8 21 8 21 6" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
+  <svg class="doodle-check" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" stroke="currentColor" stroke-width="2" fill="none"/><path d="M13 20 L18 25 L28 13" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</div>
 
 <header class="floating-account">
   <div class="favatar" id="pillAvatar" title="Account">—</div>
@@ -3979,7 +4036,8 @@
     { key:'default',  label:'Teal / violet',    icon:'◐' },
     { key:'nebula',   label:'Nebula magenta',   icon:'✦' },
     { key:'cryo',     label:'Cryo focus',       icon:'❄' },
-    { key:'terminal', label:'Terminal green',   icon:'❯' }
+    { key:'terminal', label:'Terminal green',   icon:'❯' },
+    { key:'paper',    label:'Paper doodle',     icon:'✎' }
   ];
   // Hex swatches per theme, mirroring the :root[data-theme="..."] CSS
   // blocks above — kept here (rather than read live via getComputedStyle)
@@ -3989,7 +4047,8 @@
     default:  { teal:'#4fe3c1', violet:'#9b8cff', amber:'#f2a93b' },
     nebula:   { teal:'#c86dfa', violet:'#ff5fa2', amber:'#ffb648' },
     cryo:     { teal:'#3ea6ff', violet:'#22d3ee', amber:'#f2a93b' },
-    terminal: { teal:'#4ade80', violet:'#14b8a6', amber:'#f2a93b' }
+    terminal: { teal:'#4ade80', violet:'#14b8a6', amber:'#f2a93b' },
+    paper:    { teal:'#e8544a', violet:'#c2417a', amber:'#ca8a04' }
   };
   // Looks up any member's own palette by their theme key (falls back to
   // default for unknown/missing keys, e.g. a peer on an older app version
