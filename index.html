@@ -595,12 +595,15 @@
 </style>
 <script>
   // Applied as early as possible (before body renders) so a returning
-  // visitor doesn't see a flash of the default theme first. The toggle
-  // button later in <body> just cycles this same attribute + localStorage
-  // key through the THEMES list.
+  // visitor doesn't see a flash of the wrong theme first. 'paper' is the
+  // default look for anyone who hasn't saved a choice yet (brand new
+  // browser, nothing in localStorage); an explicit prior choice — even
+  // literally 'default', the original dark theme — is always respected
+  // over that fallback. The toggle button later in <body> just cycles
+  // this same attribute + localStorage key through the THEMES list.
   try{
-    var savedTheme = localStorage.getItem('studygrid-theme');
-    if(savedTheme && savedTheme !== 'default') document.documentElement.setAttribute('data-theme', savedTheme);
+    var savedTheme = localStorage.getItem('studygrid-theme') || 'paper';
+    if(savedTheme !== 'default') document.documentElement.setAttribute('data-theme', savedTheme);
   }catch(e){}
 </script>
 </head>
@@ -1225,9 +1228,12 @@
     totalHours:0, totalXP:0,
     dailyLog:{}, sessionHistory:[],
     rooms:[], // [{code, name}] — multi-room support
-    theme:'default', // this user's chosen palette — synced so OTHER viewers
-                      // render this member's avatar in it, independent of
-                      // whatever theme the viewer has picked for themselves
+    theme:'paper', // this user's chosen palette — synced so OTHER viewers
+                    // render this member's avatar in it, independent of
+                    // whatever theme the viewer has picked for themselves.
+                    // 'paper' (not the original dark theme) is the default
+                    // for a brand new account — matches the flash-
+                    // prevention fallback in <head>.
     themeOnboarded:false, // true once this ACCOUNT has ever picked a theme
                           // or dismissed the popup, on ANY device — synced
                           // to the cloud profile like everything else in
@@ -4203,13 +4209,15 @@
     };
     document.getElementById('themeModalClose').onclick = ()=>{
       // First-run auto popup: closing without picking still counts as
-      // "onboarded" so it won't reopen itself on ANY device — same effect
-      // as tapping a theme (keeps the current/default palette). Gated on
-      // state.themeOnboarded rather than localStorage so this correctly
-      // no-ops for a manual open (themeToggleBtn) on an already-onboarded
-      // account, instead of re-applying 'default' over whatever theme is
-      // actually active.
-      if(!state.themeOnboarded) applyTheme('default');
+      // "onboarded" so it won't reopen itself on ANY device. Deliberately
+      // does NOT force any particular theme here — whatever's already
+      // showing (paper, for a brand-new account that's never touched the
+      // picker; whatever was already active, for an existing one) is left
+      // exactly as-is. This only records that the popup has been seen.
+      if(!state.themeOnboarded && state.id){
+        state.themeOnboarded = true;
+        saveProfile();
+      }
       closeModal('themeModal');
     };
     refreshThemeAccentColors();
